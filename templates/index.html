@@ -104,6 +104,7 @@
             text-shadow: 0 0 10px rgba(255,255,255,0.5);
         }
 
+        /* Buttons - Upgraded for INSTANT clicks and no getting stuck */
         button { 
             background: rgba(0, 0, 0, 0.4); 
             border: 1px solid rgba(255,255,255,0.15); 
@@ -112,21 +113,26 @@
             border-radius: 16px; 
             cursor: pointer; 
             font-weight: 600;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            /* Snappy 0.15s recovery time so it doesn't drag */
+            transition: all 0.15s ease-out; 
             margin-left: 10px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
         button:hover { 
             background: rgba(0, 0, 0, 0.6); 
             border-color: rgba(255,255,255,0.3);
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            /* Removed the scale() so it doesn't get stuck looking massive */
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
         }
         button:active {
+            /* INSTANT reaction when you click (0.05s) */
             transform: translateY(2px) scale(0.95);
+            transition: all 0.05s ease-in; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
-        .btn-stop { background: rgba(253, 107, 138, 0.2); border-color: rgba(253, 107, 138, 0.5); }
-        .btn-stop:hover { background: rgba(253, 107, 138, 0.4); box-shadow: 0 8px 25px rgba(253, 107, 138, 0.3); }
+        .btn-stop { background: rgba(253, 107, 138, 0.15); border-color: rgba(253, 107, 138, 0.4); }
+        .btn-stop:hover { background: rgba(253, 107, 138, 0.3); box-shadow: 0 8px 20px rgba(253, 107, 138, 0.2); }
         
         /* Main Workspace layout */
         .workspace { display: flex; gap: 20px; flex: 1; overflow: hidden; position: relative; }
