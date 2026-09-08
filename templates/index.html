@@ -19,15 +19,14 @@
             overflow: hidden; display: flex; flex-direction: column;
         }
         
-        /* Draggable Top Bar with Icons */
-        .title-bar {
-            -webkit-app-region: drag; /* Makes frameless window draggable */
+        /* App Header (No longer drag region since macOS title bar handles it) */
+        .app-header {
             height: 60px; background: var(--glass-bg);
             border-bottom: 1px solid var(--glass-border);
             display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px; backdrop-filter: blur(10px);
+            padding: 0 20px; flex-shrink: 0;
         }
-        .icons { display: flex; gap: 20px; -webkit-app-region: no-drag; }
+        .icons { display: flex; gap: 20px; }
         .icon { font-size: 1.5rem; opacity: 0.3; transition: all 0.3s ease; }
         .icon.active-listen { opacity: 1; text-shadow: 0 0 15px var(--active-blue); }
         .icon.active-polish { opacity: 1; text-shadow: 0 0 15px var(--active-gold); }
@@ -37,52 +36,72 @@
         .brand { font-weight: 700; letter-spacing: 1px; }
 
         /* Main Layout */
-        .container { flex: 1; display: flex; position: relative; }
-        .view { width: 100%; height: 100%; padding: 20px; box-sizing: border-box; overflow-y: auto; display: none; }
-        .view.active { display: flex; flex-direction: column; }
+        .container { flex: 1; display: flex; position: relative; overflow: hidden; }
+        .view { width: 100%; height: 100%; padding: 20px; box-sizing: border-box; display: none; flex-direction: column; }
+        .view.active { display: flex; }
 
         /* Live View Components */
         .class-selector {
-            display: flex; gap: 10px; margin-bottom: 20px;
+            display: flex; gap: 10px; margin-bottom: 20px; flex-shrink: 0;
         }
         select, input {
             background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
             color: white; padding: 10px; border-radius: 8px; flex: 1;
         }
-        .notes-feed { flex: 1; overflow-y: auto; line-height: 1.6; color: #cbd5e1; }
+        
+        /* The Feed (This pushes the buttons to the bottom) */
+        .notes-feed { 
+            flex: 1; 
+            overflow-y: auto; 
+            line-height: 1.6; 
+            color: #cbd5e1; 
+            margin-bottom: 20px;
+            padding-right: 10px; /* Space for scrollbar */
+        }
         .note-chunk { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+
+        /* Action Bar (Always visible at the bottom) */
+        .action-bar {
+            display: flex; gap: 10px; flex-shrink: 0;
+        }
+        button {
+            background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);
+            color: white; padding: 12px 20px; border-radius: 8px; cursor: pointer;
+            font-weight: 600; flex: 1; transition: 0.2s;
+        }
+        button:hover { background: rgba(255,255,255,0.2); }
+        
+        #btn-pause { border-color: var(--active-blue); color: var(--active-blue); background: rgba(56, 189, 248, 0.1); }
+        #btn-pause.paused { border-color: #94a3b8; color: #94a3b8; background: rgba(148, 163, 184, 0.1); }
+        
+        #btn-end { border-color: #ef4444; color: #fca5a5; background: rgba(239, 68, 68, 0.1); }
+        #btn-end:hover { background: rgba(239, 68, 68, 0.2); }
 
         /* Google Search Sidebar Popup */
         #search-sidebar {
             position: absolute; right: -300px; top: 0; width: 280px; height: 100%;
             background: rgba(15, 23, 42, 0.95); border-left: 1px solid var(--glass-border);
-            transition: right 0.4s ease; padding: 20px; box-sizing: border-box; backdrop-filter: blur(15px);
+            transition: right 0.4s ease; padding: 20px; box-sizing: border-box; z-index: 10;
         }
         #search-sidebar.open { right: 0; }
 
         /* Viewer Mode Components */
-        .viewer-layout { display: flex; height: 100%; gap: 20px; }
-        .file-list { width: 30%; border-right: 1px solid var(--glass-border); overflow-y: auto; }
+        .viewer-layout { display: flex; height: 100%; gap: 20px; overflow: hidden; }
+        .file-list { width: 30%; border-right: 1px solid var(--glass-border); overflow-y: auto; padding-right: 10px; }
         .file-item { padding: 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .file-item:hover { background: rgba(255,255,255,0.1); }
-        .file-content { flex: 1; overflow-y: auto; position: relative; padding-right: 10px;}
-        
-        button {
-            background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);
-            color: white; padding: 10px 15px; border-radius: 8px; cursor: pointer;
-        }
-        button:hover { background: rgba(255,255,255,0.2); }
-        .btn-process { background: rgba(245, 158, 11, 0.2); border-color: var(--active-gold); width: 100%; margin-bottom: 15px;}
+        .file-content { flex: 1; overflow-y: auto; padding-right: 10px; }
+        .btn-process { background: rgba(245, 158, 11, 0.2); border-color: var(--active-gold); width: 100%; margin-bottom: 15px; color: var(--active-gold);}
     </style>
 </head>
 <body>
 
-    <div class="title-bar">
+    <div class="app-header">
         <div class="icons">
             <div class="icon" id="icon-listen" title="Listening">🎙️</div>
             <div class="icon" id="icon-polish" title="Polishing">✨</div>
             <div class="icon" id="icon-summary" title="Summarizing">📝</div>
-            <div class="icon" id="icon-viewer" title="Viewer Mode" onclick="toggleViewer()" style="cursor:pointer; -webkit-app-region: no-drag;">📚</div>
+            <div class="icon" id="icon-viewer" title="Viewer Mode" onclick="toggleViewer()" style="cursor:pointer;">📚</div>
         </div>
         <div class="brand">DWS:Aurora</div>
     </div>
@@ -95,9 +114,15 @@
                     <option value="">Select Existing Class...</option>
                 </select>
                 <input type="text" id="class-input" placeholder="Or type new class name..." onchange="updateClass(this.value)">
-                <button onclick="endLecture()" style="border-color: #ef4444; color: #fca5a5;">End</button>
             </div>
+            
             <div class="notes-feed" id="live-notes"></div>
+            
+            <!-- Pinned Bottom Controls -->
+            <div class="action-bar">
+                <button id="btn-pause" onclick="togglePauseUI()">Pause Recording</button>
+                <button id="btn-end" onclick="endLecture()">End Lecture</button>
+            </div>
         </div>
 
         <!-- VIEWER VIEW -->
@@ -129,9 +154,13 @@
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') {
                 e.preventDefault();
-                fetch('/api/toggle_pause', { method: 'POST' });
+                togglePauseUI();
             }
         });
+
+        async function togglePauseUI() {
+            await fetch('/api/toggle_pause', { method: 'POST' });
+        }
 
         function toggleViewer() {
             isViewerMode = !isViewerMode;
@@ -189,7 +218,7 @@
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ path: currentViewingFile })
             });
-            loadNoteContent(currentViewingFile); // Reload when done
+            loadNoteContent(currentViewingFile);
         }
 
         // --- Live Loop & UI State ---
@@ -202,6 +231,16 @@
                 document.getElementById('icon-listen').className = `icon ${data.activity === 'listening' ? 'active-listen' : ''}`;
                 document.getElementById('icon-polish').className = `icon ${data.activity === 'polishing' ? 'active-polish' : ''}`;
                 document.getElementById('icon-summary').className = `icon ${data.activity === 'summarizing' ? 'active-summary' : ''}`;
+
+                // Update Physical Pause Button
+                const pauseBtn = document.getElementById('btn-pause');
+                if (data.is_recording) {
+                    pauseBtn.innerText = "Pause Recording";
+                    pauseBtn.classList.remove('paused');
+                } else {
+                    pauseBtn.innerText = "Resume Recording";
+                    pauseBtn.classList.add('paused');
+                }
 
                 // Update Search Sidebar
                 if (data.search_query && data.search_query !== currentSearchQuery) {
@@ -218,7 +257,12 @@
                         notesDiv.innerHTML += `<div class="note-chunk">${note}</div>`;
                     });
 
-                    // Populate dropdown initially
+                    // Auto-scroll logic (scrolls to bottom if a new note is added)
+                    if (notesDiv.scrollHeight > notesDiv.clientHeight && notesDiv.dataset.count != data.notes.length) {
+                        notesDiv.scrollTop = notesDiv.scrollHeight;
+                        notesDiv.dataset.count = data.notes.length;
+                    }
+
                     const dropdown = document.getElementById('class-dropdown');
                     if (dropdown.options.length === 1 && data.existing_classes.length > 0) {
                         data.existing_classes.forEach(c => {
@@ -240,7 +284,7 @@
         
         function closeSearch() {
             document.getElementById('search-sidebar').classList.remove('open');
-            fetch('/api/clear_search', { method: 'POST' }); // Tell backend we saw it
+            fetch('/api/clear_search', { method: 'POST' });
         }
 
         pollState();
