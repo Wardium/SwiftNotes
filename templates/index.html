@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DWS-SwiftNote</title>
+    <style>
+        /* Glassmorphism Variables & Base */
+        :root {
+            --glass-bg: rgba(25, 25, 35, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-glow: 0 0 10px rgba(255,255,255,0.2);
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: #f8fafc;
+            overflow: hidden;
+        }
+
+        /* Sidebar UI */
+        .sidebar {
+            width: 300px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid var(--glass-border);
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-shadow: var(--text-glow);
+            margin-bottom: 20px;
+        }
+        .status-badge {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            padding: 12px 15px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .pulse {
+            width: 10px;
+            height: 10px;
+            background: #38bdf8;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #38bdf8;
+            animation: pulse-animation 1.5s infinite;
+        }
+        @keyframes pulse-animation {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Controls */
+        .controls {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+
+        /* Main Note Area */
+        .main-content {
+            flex-grow: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .class-header {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        .notes-container {
+            margin-top: 30px;
+            line-height: 1.8;
+            font-size: 1.1rem;
+            color: #cbd5e1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .note-chunk {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 20px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="brand">DWS-SwiftNote</div>
+        
+        <div class="status-badge">
+            <div class="pulse" id="pulse-indicator"></div>
+            <span id="ai-status">Initializing...</span>
+        </div>
+
+        <div class="controls">
+            <button onclick="togglePause()" id="pause-btn">Pause Listening</button>
+            <button class="btn-danger" onclick="endLecture()">End Lecture & Summarize</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="class-header" id="class-title">Detecting...</div>
+        <div class="notes-container" id="notes">
+            <!-- AI formatted notes will appear here -->
+        </div>
+    </div>
+
+    <script>
+        async function fetchState() {
+            try {
+                const res = await fetch('/api/state');
+                const data = await res.json();
+                
+                // Update Sidebar
+                document.getElementById('ai-status').innerText = data.status;
+                document.getElementById('class-title').innerText = data.class_name;
+                document.getElementById('pause-btn').innerText = data.is_recording ? "Pause Listening" : "Resume Listening";
+                
+                // Manage pulse animation based on status
+                const pulse = document.getElementById('pulse-indicator');
+                if(data.status === "Paused" || !data.lecture_active) {
+                    pulse.style.animation = "none";
+                    pulse.style.background = "#64748b";
+                    pulse.style.boxShadow = "none";
+                } else {
+                    pulse.style.animation = "pulse-animation 1.5s infinite";
+                    pulse.style.background = "#38bdf8";
+                    pulse.style.boxShadow = "0 0 10px #38bdf8";
+                }
+
+                // Render Notes
+                const notesDiv = document.getElementById('notes');
+                notesDiv.innerHTML = '';
+                data.notes.forEach(note => {
+                    const chunk = document.createElement('div');
+                    chunk.className = 'note-chunk';
+                    chunk.innerHTML = note.replace(/\n/g, '<br>'); // Handle markdown linebreaks
+                    notesDiv.appendChild(chunk);
+                });
+
+            } catch (err) {
+                console.error("Failed to fetch state");
+            }
+        }
+
+        async function togglePause() {
+            await fetch('/api/toggle_pause', { method: 'POST' });
+            fetchState();
+        }
+
+        async function endLecture() {
+            document.getElementById('ai-status').innerText = "Summarizing (DWS:Aurora)...";
+            await fetch('/api/end_lecture', { method: 'POST' });
+            fetchState();
+        }
+
+        // Poll the Python backend every 2 seconds
+        setInterval(fetchState, 2000);
+        fetchState();
+    </script>
+</body>
+</html>
