@@ -8,19 +8,20 @@
         body { font-family: system-ui; background: linear-gradient(135deg, #1e1e2f, #2a2a4a); color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 95vh; overflow: hidden; }
         .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 15px; }
         
-        /* Top Navigation */
         nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        button { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
+        button { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; margin-left: 10px; }
         button:hover { background: rgba(255, 255, 255, 0.2); }
+        .btn-stop { background: rgba(253, 107, 138, 0.2); border-color: rgba(253, 107, 138, 0.5); }
+        .btn-stop:hover { background: rgba(253, 107, 138, 0.4); }
         
-        /* Layout Grid */
         .workspace { display: flex; gap: 20px; flex: 1; overflow: hidden; }
         .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 10px; }
-        .note-card { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border-left: 3px solid #6b8afd; }
+        .note-card { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border-left: 3px solid #6b8afd; line-height: 1.5; }
         
-        /* Search Panel & Modals */
-        #search-panel { flex: 0.8; display: none; flex-direction: column; }
-        iframe { flex: 1; width: 100%; border: none; border-radius: 8px; background: white; }
+        /* New Native Search Panel */
+        #search-panel { flex: 0.7; display: none; flex-direction: column; border-left: 3px solid #fd6b8a; }
+        #search-content { background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; flex: 1; overflow-y: auto; }
+        
         #viewer-modal { display: none; position: absolute; top: 10%; left: 10%; right: 10%; bottom: 10%; z-index: 100; flex-direction: row; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         #file-list { flex: 0.3; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px; }
         #file-content { flex: 0.7; padding-left: 20px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
@@ -37,6 +38,7 @@
         </div>
         <div>
             <button onclick="togglePause()">Play / Pause</button>
+            <button class="btn-stop" onclick="endLecture()">End Lecture</button>
             <button onclick="toggleViewer()">Viewer Mode</button>
         </div>
     </nav>
@@ -48,13 +50,15 @@
         </div>
         
         <div class="col glass">
-            <h3 style="margin-top:0;">Summaries</h3>
-            <div id="summaries-container" class="col"></div>
+            <h3 style="margin-top:0;">Lecture Summary</h3>
+            <div id="summaries-container" class="col">
+                <em style="color: #aaa;">Summary will be generated when lecture ends...</em>
+            </div>
         </div>
 
         <div id="search-panel" class="glass">
-            <h3 style="margin-top:0;">AI Search Reference</h3>
-            <iframe id="search-frame" src=""></iframe>
+            <h3 style="margin-top:0;">AI Reference</h3>
+            <div id="search-content"></div>
         </div>
     </div>
 
@@ -62,12 +66,13 @@
     <div id="viewer-modal" class="glass">
         <div id="file-list"></div>
         <div id="file-content">Select a file to view its contents...</div>
-        <button onclick="toggleViewer()" style="position:absolute; top:15px; right:15px; background: red;">Close</button>
+        <button onclick="toggleViewer()" style="position:absolute; top:15px; right:15px; background: red; color: white;">Close</button>
     </div>
 
     <script>
         let searchTimeout;
         let knownNotesCount = 0;
+        let summaryDisplayed = false;
 
         async function fetchState() {
             const res = await fetch('/api/state');
@@ -76,40 +81,66 @@
             document.getElementById('class-name').innerText = state.class_name;
             document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
 
-            // Only append new notes
             if (state.notes.length > knownNotesCount) {
                 const newNotes = state.notes.slice(knownNotesCount);
                 newNotes.forEach(note => {
-                    if(typeof note === 'object') {
-                        document.getElementById('notes-container').innerHTML += `<div class="note-card">${note.paragraph}</div>`;
-                        document.getElementById('summaries-container').innerHTML += `<div class="note-card" style="border-left-color:#fd6b8a">${note.summary}</div>`;
-                    }
+                    document.getElementById('notes-container').innerHTML += `<div class="note-card">${note.paragraph}</div>`;
                 });
                 knownNotesCount = state.notes.length;
             }
 
-            // Handle Search Intercept
+            // Display master summary if it exists
+            if (state.lecture_summary && !summaryDisplayed) {
+                const mdFormat = state.lecture_summary.replace(/\n/g, '<br>');
+                document.getElementById('summaries-container').innerHTML = `<div class="note-card" style="border-left-color:#fd6b8a">${mdFormat}</div>`;
+                summaryDisplayed = true;
+            }
+
+            // Trigger Search Intercept if AI provided a term
             if (state.search_query) {
-                triggerSearch(state.search_query);
-                fetch('/api/clear_search', { method: 'POST' }); // Reset immediately so it doesn't loop
+                triggerNativeSearch(state.search_query);
+                fetch('/api/clear_search', { method: 'POST' }); 
             }
         }
 
-        function triggerSearch(term) {
+        async function triggerNativeSearch(term) {
             const panel = document.getElementById('search-panel');
-            const iframe = document.getElementById('search-frame');
-            panel.style.display = 'flex';
-            iframe.src = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(term)}`;
-
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                panel.style.display = 'none';
-                iframe.src = "";
-            }, 120000); // 2 minutes
+            const searchContent = document.getElementById('search-content');
+            
+            try {
+                // Fetch directly from Wikipedia API to bypass IFrame blocking
+                const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`);
+                if (!res.ok) throw new Error('Not found');
+                const data = await res.json();
+                
+                searchContent.innerHTML = `
+                    <h4 style="margin: 0 0 10px 0; color: #6b8afd;">${data.title}</h4>
+                    <p style="font-size: 0.9em; line-height: 1.4;">${data.extract}</p>
+                    <a href="${data.content_urls.desktop.page}" target="_blank" style="color: #fd6b8a; text-decoration: none; font-size: 0.85em;">Read full article...</a>
+                `;
+                
+                panel.style.display = 'flex';
+                
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    panel.style.display = 'none';
+                    searchContent.innerHTML = "";
+                }, 120000); // 2 minutes
+                
+            } catch (err) {
+                console.log("Term not found on Wikipedia:", term);
+            }
         }
 
         async function togglePause() {
             await fetch('/api/toggle_pause', { method: 'POST' });
+        }
+
+        async function endLecture() {
+            if(confirm("End the lecture and generate the final summary?")) {
+                document.getElementById('summaries-container').innerHTML = `<em style="color: #fd6b8a;">Generating master summary...</em>`;
+                await fetch('/api/end_lecture', { method: 'POST' });
+            }
         }
 
         async function toggleViewer() {
@@ -121,7 +152,7 @@
                 const res = await fetch('/api/files');
                 const files = await res.json();
                 
-                let listHtml = '<h3>Past Notes</h3>';
+                let listHtml = '<h3 style="margin-top:0;">Past Notes</h3>';
                 files.forEach(f => {
                     listHtml += `<div class="file-item" onclick="viewFile('${f.path.replace(/\\/g, '\\\\')}')">
                         <strong>${f.class}</strong><br><small>${f.date}</small>
@@ -141,7 +172,6 @@
             document.getElementById('file-content').innerText = data.content;
         }
 
-        // Poll every 2 seconds
         setInterval(fetchState, 2000);
     </script>
 </body>
