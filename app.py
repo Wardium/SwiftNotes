@@ -221,6 +221,35 @@ def file_content():
     with open(request.json.get("path"), "r") as f:
         return jsonify({"content": f.read()})
 
+@app.route("/api/rename_class", methods=["POST"])
+def rename_class():
+    new_name = request.json.get("class_name", "").strip()
+    if not new_name:
+        return jsonify({"success": False})
+
+    old_name = app_state["class_name"]
+    
+    # If notes already exist and we aren't just stuck on 'Detecting...', move the file to the new folder
+    if app_state["notes"] and old_name != "Detecting..." and old_name != new_name:
+        old_dir = os.path.join(NOTES_DIR, old_name)
+        old_file = os.path.join(old_dir, f"{get_formatted_date()}.md")
+        
+        new_dir = os.path.join(NOTES_DIR, new_name)
+        new_file = os.path.join(new_dir, f"{get_formatted_date()}.md")
+        
+        os.makedirs(new_dir, exist_ok=True)
+        
+        if os.path.exists(old_file):
+            os.rename(old_file, new_file)
+            # Clean up the old directory if it's now empty
+            if not os.listdir(old_dir):
+                os.rmdir(old_dir)
+    
+    app_state["class_name"] = new_name
+    update_existing_classes() # Refresh the global classes list
+    save_note_to_disk()
+    return jsonify({"success": True})
+
 def start_server(): app.run(host="127.0.0.1", port=5000, debug=False)
 
 if __name__ == "__main__":
