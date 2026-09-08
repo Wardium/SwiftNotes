@@ -18,22 +18,27 @@
         .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 10px; padding-right: 5px; }
         .note-card { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border-left: 3px solid #6b8afd; line-height: 1.5; }
         
-        /* Restored Iframe Styling */
         #search-panel { flex: 0.8; display: none; flex-direction: column; border-left: 3px solid #fd6b8a; }
         iframe { flex: 1; width: 100%; border: none; border-radius: 8px; background: white; }
         
+        /* Viewer UI */
         #viewer-modal { display: none; position: absolute; top: 10%; left: 10%; right: 10%; bottom: 10%; z-index: 100; flex-direction: row; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         #file-list { flex: 0.3; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px; }
         #file-content { flex: 0.7; padding-left: 20px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
         .file-item { padding: 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .file-item:hover { background: rgba(255,255,255,0.1); }
+        
+        /* Editable Title Input */
+        #class-name-input { font-size: 1.5em; font-weight: bold; font-family: inherit; background: rgba(0,0,0,0.3); color: white; border: 1px solid #6b8afd; border-radius: 5px; padding: 5px; outline: none; }
     </style>
 </head>
 <body>
 
     <nav class="glass">
         <div>
-            <h2 id="class-name" style="margin: 0;">Detecting Class...</h2>
+            <div id="title-container" onclick="editTitle()">
+                <h2 id="class-name" style="margin: 0; cursor: pointer;" title="Click to rename subject">Detecting Class...</h2>
+            </div>
             <small id="status">Status: Idle</small>
         </div>
         <div>
@@ -44,13 +49,11 @@
     </nav>
 
     <div class="workspace">
-        <!-- Notes Column -->
         <div class="col glass">
             <h3 style="margin-top:0;">Transcribed Notes</h3>
             <div id="notes-container" class="col"></div>
         </div>
         
-        <!-- Summary Column -->
         <div class="col glass">
             <h3 style="margin-top:0;">Lecture Summary</h3>
             <div id="summaries-container" class="col">
@@ -58,7 +61,6 @@
             </div>
         </div>
 
-        <!-- Restored Interactive Iframe Panel -->
         <div id="search-panel" class="glass">
             <h3 style="margin-top:0; color: #fd6b8a;">AI Reference</h3>
             <iframe id="search-frame" src=""></iframe>
@@ -68,7 +70,7 @@
     <!-- Viewer Mode Overlay -->
     <div id="viewer-modal" class="glass">
         <div id="file-list"></div>
-        <div id="file-content">Select a file to view its contents...</div>
+        <div id="file-content">Select a subject to view its dates...</div>
         <button onclick="toggleViewer()" style="position:absolute; top:15px; right:15px; background: red; color: white;">Close</button>
     </div>
 
@@ -76,15 +78,23 @@
         let searchTimeout;
         let knownNotesCount = 0;
         let summaryDisplayed = false;
+        let isEditingTitle = false;
+        let lastKnownClasses = [];
+        let allFiles = []; // For Viewer Mode caching
 
         async function fetchState() {
             const res = await fetch('/api/state');
             const state = await res.json();
             
-            document.getElementById('class-name').innerText = state.class_name;
+            // Protect the title from being overwritten by the API loop while you are typing
+            if (!isEditingTitle) {
+                document.getElementById('class-name').innerText = state.class_name;
+            }
+            
+            lastKnownClasses = state.existing_classes;
             document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
 
-            // Append new notes as they come in
+            // Append new notes
             if (state.notes.length > knownNotesCount) {
                 const newNotes = state.notes.slice(knownNotesCount);
                 newNotes.forEach(note => {
@@ -93,26 +103,120 @@
                 knownNotesCount = state.notes.length;
             }
 
-            // Display master summary once the lecture ends
+            // Display master summary
             if (state.lecture_summary && !summaryDisplayed) {
                 const mdFormat = state.lecture_summary.replace(/\n/g, '<br>');
                 document.getElementById('summaries-container').innerHTML = `<div class="note-card" style="border-left-color:#fd6b8a">${mdFormat}</div>`;
                 summaryDisplayed = true;
             }
 
-            // Trigger the Iframe if the AI provides a term
+            // Handle Search Panel
             if (state.search_query) {
                 triggerInteractiveSearch(state.search_query);
                 fetch('/api/clear_search', { method: 'POST' }); 
             }
         }
 
-        // The new function that handles the scrollable iframe
+        // --- Title Editing Logic ---
+        function editTitle() {
+            if (isEditingTitle) return;
+            isEditingTitle = true;
+            
+            const currentName = document.getElementById('class-name').innerText;
+            const container = document.getElementById('title-container');
+            
+            // Build the dropdown options dynamically from previous classes
+            let datalistOptions = lastKnownClasses.map(c => `<option value="${c}">`).join('');
+            
+            container.innerHTML = `
+                <input type="text" id="class-name-input" list="class-list" value="${currentName === 'Detecting...' ? '' : currentName}">
+                <datalist id="class-list">
+                    ${datalistOptions}
+                </datalist>
+            `;
+            
+            const input = document.getElementById('class-name-input');
+            input.focus();
+            
+            // Save when clicking away or hitting Enter
+            input.addEventListener('blur', saveTitle);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') saveTitle();
+            });
+        }
+
+        async function saveTitle() {
+            const input = document.getElementById('class-name-input');
+            if (!input) return; // Prevent double-firing
+            
+            const newName = input.value.trim() || "Unknown Class";
+            isEditingTitle = false;
+            
+            document.getElementById('title-container').innerHTML = `<h2 id="class-name" style="margin: 0; cursor: pointer;" title="Click to rename subject">${newName}</h2>`;
+            
+            await fetch('/api/rename_class', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_name: newName })
+            });
+        }
+
+        // --- Viewer Logic ---
+        async function toggleViewer() {
+            const modal = document.getElementById('viewer-modal');
+            if (modal.style.display === 'flex') {
+                modal.style.display = 'none';
+            } else {
+                modal.style.display = 'flex';
+                const res = await fetch('/api/files');
+                allFiles = await res.json();
+                renderViewerSubjects();
+            }
+        }
+
+        function renderViewerSubjects() {
+            // Filter down to a unique list of class names
+            const subjects = [...new Set(allFiles.map(f => f.class))];
+            
+            let listHtml = '<h3 style="margin-top:0; color: #fd6b8a;">Subjects</h3>';
+            subjects.forEach(sub => {
+                listHtml += `<div class="file-item" onclick="renderViewerDates('${sub}')">
+                    <strong>📁 ${sub}</strong>
+                </div>`;
+            });
+            document.getElementById('file-list').innerHTML = listHtml;
+            document.getElementById('file-content').innerText = "Select a subject to view its dates...";
+        }
+
+        function renderViewerDates(subject) {
+            // Find all files belonging to the clicked subject
+            const dates = allFiles.filter(f => f.class === subject);
+            
+            let listHtml = `<h3 style="margin-top:0; color: #fd6b8a; cursor: pointer;" onclick="renderViewerSubjects()">⬅️ Back to Subjects</h3>`;
+            listHtml += `<h4 style="margin: 0 0 10px 0;">${subject}</h4>`;
+            
+            dates.forEach(f => {
+                listHtml += `<div class="file-item" onclick="viewFile('${f.path.replace(/\\/g, '\\\\')}')">
+                    <strong>📄 ${f.date}</strong>
+                </div>`;
+            });
+            document.getElementById('file-list').innerHTML = listHtml;
+        }
+
+        async function viewFile(path) {
+            const res = await fetch('/api/file_content', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path })
+            });
+            const data = await res.json();
+            document.getElementById('file-content').innerText = data.content;
+        }
+
+        // --- Standard Controls ---
         function triggerInteractiveSearch(term) {
             const panel = document.getElementById('search-panel');
             const iframe = document.getElementById('search-frame');
-            
-            // Route to Wikipedia to bypass X-Frame-Options blocking
             iframe.src = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}`;
             panel.style.display = 'flex';
             
@@ -120,7 +224,7 @@
             searchTimeout = setTimeout(() => {
                 panel.style.display = 'none';
                 iframe.src = "";
-            }, 120000); // Closes automatically after 2 minutes
+            }, 120000);
         }
 
         async function togglePause() {
@@ -132,35 +236,6 @@
                 document.getElementById('summaries-container').innerHTML = `<em style="color: #fd6b8a;">Generating master summary...</em>`;
                 await fetch('/api/end_lecture', { method: 'POST' });
             }
-        }
-
-        async function toggleViewer() {
-            const modal = document.getElementById('viewer-modal');
-            if (modal.style.display === 'flex') {
-                modal.style.display = 'none';
-            } else {
-                modal.style.display = 'flex';
-                const res = await fetch('/api/files');
-                const files = await res.json();
-                
-                let listHtml = '<h3 style="margin-top:0;">Past Notes</h3>';
-                files.forEach(f => {
-                    listHtml += `<div class="file-item" onclick="viewFile('${f.path.replace(/\\/g, '\\\\')}')">
-                        <strong>${f.class}</strong><br><small>${f.date}</small>
-                    </div>`;
-                });
-                document.getElementById('file-list').innerHTML = listHtml;
-            }
-        }
-
-        async function viewFile(path) {
-            const res = await fetch('/api/file_content', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: path })
-            });
-            const data = await res.json();
-            document.getElementById('file-content').innerText = data.content;
         }
 
         setInterval(fetchState, 2000);
