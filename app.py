@@ -17,7 +17,8 @@ from flask import Flask, render_template, jsonify, request
 import tkinter as tk
 from tkinter import filedialog
 from flask import jsonify
-import audioop
+import math
+import struct
 
 app = Flask(__name__)
 
@@ -93,9 +94,9 @@ def audio_capture_thread():
     CHUNK, FORMAT, CHANNELS, RATE, RECORD_SECONDS = 1024, pyaudio.paInt16, 1, 16000, 15
     p = pyaudio.PyAudio()
     
-    # --- NEW: Set your silence threshold here ---
-    # 0 = perfect silence. A quiet room is usually ~100-300.
-    # Normal talking is usually 1500+. 
+    # 0 = complete digital silence.
+    # Background room hum is typically ~100-300.
+    # Normal speaking voices land well above 1000-2000.
     SILENCE_THRESHOLD = 800  
     
     while app_state["lecture_active"]:
@@ -109,19 +110,22 @@ def audio_capture_thread():
             stream.stop_stream()
             stream.close()
             
-            # Combine the frames into raw audio data
             audio_data = b''.join(frames)
             
-            # --- NEW: Calculate the volume (RMS) of the chunk ---
-            # The '2' is the sample width for paInt16 (which is 2 bytes)
-            rms = audioop.rms(audio_data, 2)
+            # Unpack 16-bit signed integers (h format) to calculate RMS volume
+            count = len(audio_data) // 2
+            if count > 0:
+                shorts = struct.unpack(f"{count}h", audio_data)
+                sum_squares = sum(s * s for s in shorts)
+                rms = int(math.sqrt(sum_squares / count))
+            else:
+                rms = 0
             
-            # If it's too quiet, skip processing and go back to listening
+            # Skip if sound level is below threshold
             if rms < SILENCE_THRESHOLD:
-                print(f"[Mic] Skipping silent audio (Volume: {rms})")
+                print(f"[Mic] Skipping silence (Volume: {rms})")
                 continue
             
-            # If we passed the threshold, save and transcribe!
             temp_audio = f"temp_chunk_{uuid.uuid4().hex}.wav"
             with wave.open(temp_audio, 'wb') as wf:
                 wf.setnchannels(CHANNELS)
@@ -130,7 +134,6 @@ def audio_capture_thread():
                 wf.writeframes(audio_data)
             
             audio_queue.put(temp_audio)
-            
         except Exception as e:
             app_state["status"] = "Mic Error"
             time.sleep(2)
