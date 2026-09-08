@@ -1,116 +1,148 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SwiftNotes Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwiftNotes Viewer</title>
     <style>
-        /* Base styling and Glassmorphism */
-        body { font-family: system-ui; background: linear-gradient(135deg, #1e1e2f, #2a2a4a); color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
+        body { font-family: system-ui; background: linear-gradient(135deg, #1e1e2f, #2a2a4a); color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 95vh; overflow: hidden; }
         .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 15px; }
         
-        /* Layout */
+        /* Top Navigation */
         nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .main-container { display: flex; gap: 20px; flex: 1; overflow: hidden; }
-        .column { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        button { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
+        button:hover { background: rgba(255, 255, 255, 0.2); }
         
-        /* Search Panel */
+        /* Layout Grid */
+        .workspace { display: flex; gap: 20px; flex: 1; overflow: hidden; }
+        .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 10px; }
+        .note-card { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border-left: 3px solid #6b8afd; }
+        
+        /* Search Panel & Modals */
         #search-panel { flex: 0.8; display: none; flex-direction: column; }
-        iframe { width: 100%; height: 100%; border: none; border-radius: 8px; }
+        iframe { flex: 1; width: 100%; border: none; border-radius: 8px; background: white; }
+        #viewer-modal { display: none; position: absolute; top: 10%; left: 10%; right: 10%; bottom: 10%; z-index: 100; flex-direction: row; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        #file-list { flex: 0.3; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px; }
+        #file-content { flex: 0.7; padding-left: 20px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
+        .file-item { padding: 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .file-item:hover { background: rgba(255,255,255,0.1); }
     </style>
 </head>
 <body>
 
     <nav class="glass">
-        <h2 id="current-class">Detecting Class...</h2>
-        <button id="viewer-mode">Viewer Mode (Past Notes)</button>
+        <div>
+            <h2 id="class-name" style="margin: 0;">Detecting Class...</h2>
+            <small id="status">Status: Idle</small>
+        </div>
+        <div>
+            <button onclick="togglePause()">Play / Pause</button>
+            <button onclick="toggleViewer()">Viewer Mode</button>
+        </div>
     </nav>
 
-    <div class="main-container">
-        <!-- Vertical list for Note Paragraphs -->
-        <div class="column glass" id="notes-col">
-            <h3>Transcribed Notes</h3>
+    <div class="workspace">
+        <div class="col glass">
+            <h3 style="margin-top:0;">Transcribed Notes</h3>
+            <div id="notes-container" class="col"></div>
+        </div>
+        
+        <div class="col glass">
+            <h3 style="margin-top:0;">Summaries</h3>
+            <div id="summaries-container" class="col"></div>
         </div>
 
-        <!-- Vertical list for Summaries -->
-        <div class="column glass" id="summaries-col">
-            <h3>Summaries</h3>
-        </div>
-
-        <!-- Dynamic Search Panel -->
-        <div class="column glass" id="search-panel">
-            <h3>Related Search</h3>
+        <div id="search-panel" class="glass">
+            <h3 style="margin-top:0;">AI Search Reference</h3>
             <iframe id="search-frame" src=""></iframe>
         </div>
     </div>
 
+    <!-- Viewer Mode Overlay -->
+    <div id="viewer-modal" class="glass">
+        <div id="file-list"></div>
+        <div id="file-content">Select a file to view its contents...</div>
+        <button onclick="toggleViewer()" style="position:absolute; top:15px; right:15px; background: red;">Close</button>
+    </div>
+
     <script>
-        const notesCol = document.getElementById('notes-col');
-        const summariesCol = document.getElementById('summaries-col');
-        const searchPanel = document.getElementById('search-panel');
-        const searchFrame = document.getElementById('search-frame');
-        const classHeader = document.getElementById('current-class');
-        
         let searchTimeout;
+        let knownNotesCount = 0;
 
-        // 1. Continuous Listening Setup
-        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-
-        recognition.onresult = (event) => {
-            const transcript = event.results[event.results.length - 1][0].transcript;
-            processTranscript(transcript); // Send to AI without stopping recognition
-        };
-
-        // Auto-restart if it drops out
-        recognition.onend = () => recognition.start();
-        recognition.start();
-
-        // 2. Async Processing
-        async function processTranscript(text) {
-            try {
-                const response = await fetch('/process_note', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
-                });
-                
-                const data = await response.json(); // AI always responds as JSON
-                updateUI(data);
-            } catch (err) {
-                console.error("Error processing note:", err);
-            }
-        }
-
-        // 3. Robust UI Updating & Search Timer Logic
-        function updateUI(data) {
-            classHeader.innerText = data.class_name;
-
-            const noteDiv = document.createElement('div');
-            noteDiv.innerText = data.paragraph;
-            notesCol.appendChild(noteDiv);
-
-            const summaryDiv = document.createElement('div');
-            summaryDiv.innerText = data.summary;
-            summariesCol.appendChild(summaryDiv);
-
-            if (data.search_term) {
-                triggerSearchPanel(data.search_term);
-            }
-        }
-
-        function triggerSearchPanel(term) {
-            searchPanel.style.display = 'flex';
-            // Using Wikipedia or DuckDuckGo as many sites (like Google) block iframe embedding
-            searchFrame.src = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}`;
+        async function fetchState() {
+            const res = await fetch('/api/state');
+            const state = await res.json();
             
-            clearTimeout(searchTimeout); // Reset timer if a new term comes in
-            searchTimeout = setTimeout(() => {
-                searchPanel.style.display = 'none';
-                searchFrame.src = "";
-            }, 120000); // Closes after 2 minutes
+            document.getElementById('class-name').innerText = state.class_name;
+            document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
+
+            // Only append new notes
+            if (state.notes.length > knownNotesCount) {
+                const newNotes = state.notes.slice(knownNotesCount);
+                newNotes.forEach(note => {
+                    if(typeof note === 'object') {
+                        document.getElementById('notes-container').innerHTML += `<div class="note-card">${note.paragraph}</div>`;
+                        document.getElementById('summaries-container').innerHTML += `<div class="note-card" style="border-left-color:#fd6b8a">${note.summary}</div>`;
+                    }
+                });
+                knownNotesCount = state.notes.length;
+            }
+
+            // Handle Search Intercept
+            if (state.search_query) {
+                triggerSearch(state.search_query);
+                fetch('/api/clear_search', { method: 'POST' }); // Reset immediately so it doesn't loop
+            }
         }
+
+        function triggerSearch(term) {
+            const panel = document.getElementById('search-panel');
+            const iframe = document.getElementById('search-frame');
+            panel.style.display = 'flex';
+            iframe.src = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(term)}`;
+
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                panel.style.display = 'none';
+                iframe.src = "";
+            }, 120000); // 2 minutes
+        }
+
+        async function togglePause() {
+            await fetch('/api/toggle_pause', { method: 'POST' });
+        }
+
+        async function toggleViewer() {
+            const modal = document.getElementById('viewer-modal');
+            if (modal.style.display === 'flex') {
+                modal.style.display = 'none';
+            } else {
+                modal.style.display = 'flex';
+                const res = await fetch('/api/files');
+                const files = await res.json();
+                
+                let listHtml = '<h3>Past Notes</h3>';
+                files.forEach(f => {
+                    listHtml += `<div class="file-item" onclick="viewFile('${f.path.replace(/\\/g, '\\\\')}')">
+                        <strong>${f.class}</strong><br><small>${f.date}</small>
+                    </div>`;
+                });
+                document.getElementById('file-list').innerHTML = listHtml;
+            }
+        }
+
+        async function viewFile(path) {
+            const res = await fetch('/api/file_content', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path })
+            });
+            const data = await res.json();
+            document.getElementById('file-content').innerText = data.content;
+        }
+
+        // Poll every 2 seconds
+        setInterval(fetchState, 2000);
     </script>
 </body>
 </html>
