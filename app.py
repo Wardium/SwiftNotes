@@ -299,6 +299,54 @@ class SwiftNoteMenuBar(rumps.App):
     def on_quit(self, _):
         rumps.quit_application()
 
+    import multiprocessing # Add this to the top of app.py
+    
+    @app.route("/api/set_class", methods=["POST"])
+    def set_class():
+        app_state["class_name"] = request.json.get("class_name")
+        return jsonify({"success": True})
+    
+    @app.route("/api/files")
+    def list_files():
+        """Returns a list of all saved notes for the viewer."""
+        files = []
+        if os.path.exists(NOTES_DIR):
+            for class_name in os.listdir(NOTES_DIR):
+                class_path = os.path.join(NOTES_DIR, class_name)
+                if os.path.isdir(class_path):
+                    for file in os.listdir(class_path):
+                        if file.endswith(".md"):
+                            files.append({"class": class_name, "date": file.replace(".md", ""), "path": os.path.join(class_path, file)})
+        return jsonify(files)
+    
+    @app.route("/api/file_content", methods=["POST"])
+    def file_content():
+        path = request.json.get("path")
+        with open(path, "r") as f:
+            content = f.read()
+        return jsonify({"content": content, "unprocessed": "[UNPROCESSED]" in content})
+    
+    @app.route("/api/process_backlog", methods=["POST"])
+    def process_backlog():
+        """Runs the AI summarizer on an old, unprocessed file."""
+        path = request.json.get("path")
+        with open(path, "r") as f:
+            raw_content = f.read().replace("[UNPROCESSED]", "")
+            
+        summary_prompt = f"Summarize this raw lecture transcript. Include core topics, key points, and action items. Transcript: {raw_content}"
+        summary = ask_ollama(summary_prompt)
+        
+        clean_content = f"{raw_content}\n\n### Backlog Summary (DWS:Aurora)\n{summary}"
+        with open(path, "w") as f:
+            f.write(clean_content)
+            
+        return jsonify({"success": True})
+
+@app.route("/api/clear_search", methods=["POST"])
+def clear_search():
+    app_state["search_query"] = ""
+    return jsonify({"success": True})
+
 
 if __name__ == "__main__":
     os.makedirs(NOTES_DIR, exist_ok=True)
