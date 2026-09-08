@@ -231,41 +231,46 @@ def file_content():
 
 @app.route('/api/change_dir', methods=['POST'])
 def change_dir():
-    # We write a tiny python script as a string that runs independently
-    script = """
+    selected_dir = ""
+    
+    try:
+        if sys.platform == 'darwin':  # If running on macOS
+            # Use native Mac AppleScript to open the Finder folder picker safely
+            script = '''
+            tell application (path to frontmost application as text)
+                set theFolder to choose folder with prompt "Select SwiftNotes Save Directory"
+                POSIX path of theFolder
+            end tell
+            '''
+            result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+            
+            # Read the output
+            if result.returncode == 0:
+                selected_dir = result.stdout.strip()
+                
+        else:
+            # If running on Windows, use the Tkinter subprocess method
+            script = """
 import tkinter as tk
 from tkinter import filedialog
 import os
-
 root = tk.Tk()
 root.withdraw()
 root.attributes('-topmost', True)
-# Open the dialog and print the result so our main app can read it
 folder = filedialog.askdirectory(initialdir=os.environ.get('START_DIR', ''))
 print(folder)
 """
-    # Pass the current directory safely using environment variables
-    env = os.environ.copy()
-    env['START_DIR'] = app_state["current_save_dir"]
-    
-    try:
-        # Run the tiny script in a completely separate process to prevent threading crashes
-        result = subprocess.run(
-            [sys.executable, '-c', script], 
-            env=env, 
-            capture_output=True, 
-            text=True
-        )
-        
-        # Read what the dialog printed out
-        selected_dir = result.stdout.strip()
-        
-        # If the user selected a folder (and didn't hit cancel)
-        if selected_dir and selected_dir != "None" and selected_dir != "":
-            app_state["current_save_dir"] = selected_dir
-            
+            env = os.environ.copy()
+            env['START_DIR'] = app_state["current_save_dir"]
+            result = subprocess.run([sys.executable, '-c', script], env=env, capture_output=True, text=True)
+            selected_dir = result.stdout.strip()
+
     except Exception as e:
         print(f"Error opening folder picker: {e}")
+        
+    # If the user selected a folder (and didn't hit cancel)
+    if selected_dir and selected_dir != "None" and selected_dir != "":
+        app_state["current_save_dir"] = selected_dir
         
     return jsonify({"status": "success", "new_dir": app_state["current_save_dir"]})
 
