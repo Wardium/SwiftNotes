@@ -17,7 +17,7 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__name__))
 NOTES_DIR = os.path.join(BASE_DIR, "notes")
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+OLLAMA_URL = "https://ai-super.teamexist.com/api/generate"
 MODEL_NAME = "DWS:Aurora"
 
 audio_queue = queue.Queue()
