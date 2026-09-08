@@ -12,6 +12,8 @@ import webview
 import json
 import re
 from flask import Flask, render_template, jsonify, request
+import tkinter as tk
+from tkinter import filedialog
 
 app = Flask(__name__)
 
@@ -22,7 +24,11 @@ MODEL_NAME = "DWS:Aurora"
 
 audio_queue = queue.Queue()
 
+DEFAULT_SAVE_DIR = os.path.join(os.path.expanduser("~"), "Documents", "SwiftNotes")
+os.makedirs(DEFAULT_SAVE_DIR, exist_ok=True) # Ensure it exists immediately
+
 app_state = {
+    "current_save_dir": DEFAULT_SAVE_DIR,
     "status": "Idle",
     "class_name": "Detecting...",
     "notes": [], 
@@ -63,7 +69,8 @@ def save_note_to_disk():
     if app_state["class_name"] == "Detecting..." or not app_state["notes"]:
         return
     
-    class_dir = os.path.join(NOTES_DIR, app_state["class_name"])
+    # CHANGE IS HERE: Use the dynamic directory from app_state
+    class_dir = os.path.join(app_state["current_save_dir"], app_state["class_name"])
     os.makedirs(class_dir, exist_ok=True)
     file_path = os.path.join(class_dir, f"{get_formatted_date()}.md")
     
@@ -77,7 +84,7 @@ def save_note_to_disk():
         # Append the master summary to the file if it exists
         if app_state["lecture_summary"]:
             f.write(f"\n\n### Lecture Summary\n{app_state['lecture_summary']}")
-
+            
 def audio_capture_thread():
     CHUNK, FORMAT, CHANNELS, RATE, RECORD_SECONDS = 1024, pyaudio.paInt16, 1, 16000, 15
     p = pyaudio.PyAudio()
@@ -220,6 +227,27 @@ def list_files():
 def file_content():
     with open(request.json.get("path"), "r") as f:
         return jsonify({"content": f.read()})
+
+@app.route('/api/change_dir', methods=['POST'])
+def change_dir():
+    # Initialize tkinter and hide the main window
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True) # Force the window to open on top of the app
+    
+    # Open the folder picker
+    selected_dir = filedialog.askdirectory(
+        title="Select SwiftNotes Save Directory",
+        initialdir=app_state["current_save_dir"]
+    )
+    
+    root.destroy()
+    
+    # If the user selected a folder (didn't click cancel), update the state
+    if selected_dir:
+        app_state["current_save_dir"] = selected_dir
+        
+    return jsonify({"status": "success", "new_dir": app_state["current_save_dir"]})
 
 @app.route("/api/rename_class", methods=["POST"])
 def rename_class():
