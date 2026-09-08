@@ -16,7 +16,7 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__name__))
 NOTES_DIR = os.path.join(BASE_DIR, "notes")
-OLLAMA_URL = "https://ai-suoer.teamexist.com/api/generate" # Default local Ollama port
+OLLAMA_URL = "https://ai-super.teamexist.com/api/generate" # Default local Ollama port
 MODEL_NAME = "DWS:Aurora"
 
 audio_queue = queue.Queue()
