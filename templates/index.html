@@ -15,12 +15,12 @@
         .btn-stop:hover { background: rgba(253, 107, 138, 0.4); }
         
         .workspace { display: flex; gap: 20px; flex: 1; overflow: hidden; }
-        .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 10px; }
+        .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 10px; padding-right: 5px; }
         .note-card { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border-left: 3px solid #6b8afd; line-height: 1.5; }
         
-        /* New Native Search Panel */
-        #search-panel { flex: 0.7; display: none; flex-direction: column; border-left: 3px solid #fd6b8a; }
-        #search-content { background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; flex: 1; overflow-y: auto; }
+        /* Restored Iframe Styling */
+        #search-panel { flex: 0.8; display: none; flex-direction: column; border-left: 3px solid #fd6b8a; }
+        iframe { flex: 1; width: 100%; border: none; border-radius: 8px; background: white; }
         
         #viewer-modal { display: none; position: absolute; top: 10%; left: 10%; right: 10%; bottom: 10%; z-index: 100; flex-direction: row; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         #file-list { flex: 0.3; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px; }
@@ -44,11 +44,13 @@
     </nav>
 
     <div class="workspace">
+        <!-- Notes Column -->
         <div class="col glass">
             <h3 style="margin-top:0;">Transcribed Notes</h3>
             <div id="notes-container" class="col"></div>
         </div>
         
+        <!-- Summary Column -->
         <div class="col glass">
             <h3 style="margin-top:0;">Lecture Summary</h3>
             <div id="summaries-container" class="col">
@@ -56,9 +58,10 @@
             </div>
         </div>
 
+        <!-- Restored Interactive Iframe Panel -->
         <div id="search-panel" class="glass">
-            <h3 style="margin-top:0;">AI Reference</h3>
-            <div id="search-content"></div>
+            <h3 style="margin-top:0; color: #fd6b8a;">AI Reference</h3>
+            <iframe id="search-frame" src=""></iframe>
         </div>
     </div>
 
@@ -81,6 +84,7 @@
             document.getElementById('class-name').innerText = state.class_name;
             document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
 
+            // Append new notes as they come in
             if (state.notes.length > knownNotesCount) {
                 const newNotes = state.notes.slice(knownNotesCount);
                 newNotes.forEach(note => {
@@ -89,47 +93,34 @@
                 knownNotesCount = state.notes.length;
             }
 
-            // Display master summary if it exists
+            // Display master summary once the lecture ends
             if (state.lecture_summary && !summaryDisplayed) {
                 const mdFormat = state.lecture_summary.replace(/\n/g, '<br>');
                 document.getElementById('summaries-container').innerHTML = `<div class="note-card" style="border-left-color:#fd6b8a">${mdFormat}</div>`;
                 summaryDisplayed = true;
             }
 
-            // Trigger Search Intercept if AI provided a term
+            // Trigger the Iframe if the AI provides a term
             if (state.search_query) {
-                triggerNativeSearch(state.search_query);
+                triggerInteractiveSearch(state.search_query);
                 fetch('/api/clear_search', { method: 'POST' }); 
             }
         }
 
-        async function triggerNativeSearch(term) {
+        // The new function that handles the scrollable iframe
+        function triggerInteractiveSearch(term) {
             const panel = document.getElementById('search-panel');
-            const searchContent = document.getElementById('search-content');
+            const iframe = document.getElementById('search-frame');
             
-            try {
-                // Fetch directly from Wikipedia API to bypass IFrame blocking
-                const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`);
-                if (!res.ok) throw new Error('Not found');
-                const data = await res.json();
-                
-                searchContent.innerHTML = `
-                    <h4 style="margin: 0 0 10px 0; color: #6b8afd;">${data.title}</h4>
-                    <p style="font-size: 0.9em; line-height: 1.4;">${data.extract}</p>
-                    <a href="${data.content_urls.desktop.page}" target="_blank" style="color: #fd6b8a; text-decoration: none; font-size: 0.85em;">Read full article...</a>
-                `;
-                
-                panel.style.display = 'flex';
-                
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    panel.style.display = 'none';
-                    searchContent.innerHTML = "";
-                }, 120000); // 2 minutes
-                
-            } catch (err) {
-                console.log("Term not found on Wikipedia:", term);
-            }
+            // Route to Wikipedia to bypass X-Frame-Options blocking
+            iframe.src = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}`;
+            panel.style.display = 'flex';
+            
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                panel.style.display = 'none';
+                iframe.src = "";
+            }, 120000); // Closes automatically after 2 minutes
         }
 
         async function togglePause() {
