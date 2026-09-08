@@ -1,293 +1,116 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DWS:SwiftNote</title>
+    <title>SwiftNotes Pro</title>
     <style>
-        :root {
-            --glass-bg: rgba(25, 25, 35, 0.6);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --active-blue: #38bdf8;
-            --active-gold: #f59e0b;
-            --active-green: #10b981;
-        }
-        body {
-            margin: 0; padding: 0;
-            width: 100vw; height: 100vh;
-            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-            color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            overflow: hidden; display: flex; flex-direction: column;
-        }
+        /* Base styling and Glassmorphism */
+        body { font-family: system-ui; background: linear-gradient(135deg, #1e1e2f, #2a2a4a); color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 15px; }
         
-        /* App Header (No longer drag region since macOS title bar handles it) */
-        .app-header {
-            height: 60px; background: var(--glass-bg);
-            border-bottom: 1px solid var(--glass-border);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px; flex-shrink: 0;
-        }
-        .icons { display: flex; gap: 20px; }
-        .icon { font-size: 1.5rem; opacity: 0.3; transition: all 0.3s ease; }
-        .icon.active-listen { opacity: 1; text-shadow: 0 0 15px var(--active-blue); }
-        .icon.active-polish { opacity: 1; text-shadow: 0 0 15px var(--active-gold); }
-        .icon.active-summary { opacity: 1; text-shadow: 0 0 15px var(--active-green); }
-        .icon.active-viewer { opacity: 1; text-shadow: 0 0 15px white; }
-
-        .brand { font-weight: 700; letter-spacing: 1px; }
-
-        /* Main Layout */
-        .container { flex: 1; display: flex; position: relative; overflow: hidden; }
-        .view { width: 100%; height: 100%; padding: 20px; box-sizing: border-box; display: none; flex-direction: column; }
-        .view.active { display: flex; }
-
-        /* Live View Components */
-        .class-selector {
-            display: flex; gap: 10px; margin-bottom: 20px; flex-shrink: 0;
-        }
-        select, input {
-            background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
-            color: white; padding: 10px; border-radius: 8px; flex: 1;
-        }
+        /* Layout */
+        nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .main-container { display: flex; gap: 20px; flex: 1; overflow: hidden; }
+        .column { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
         
-        /* The Feed (This pushes the buttons to the bottom) */
-        .notes-feed { 
-            flex: 1; 
-            overflow-y: auto; 
-            line-height: 1.6; 
-            color: #cbd5e1; 
-            margin-bottom: 20px;
-            padding-right: 10px; /* Space for scrollbar */
-        }
-        .note-chunk { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 10px; }
-
-        /* Action Bar (Always visible at the bottom) */
-        .action-bar {
-            display: flex; gap: 10px; flex-shrink: 0;
-        }
-        button {
-            background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);
-            color: white; padding: 12px 20px; border-radius: 8px; cursor: pointer;
-            font-weight: 600; flex: 1; transition: 0.2s;
-        }
-        button:hover { background: rgba(255,255,255,0.2); }
-        
-        #btn-pause { border-color: var(--active-blue); color: var(--active-blue); background: rgba(56, 189, 248, 0.1); }
-        #btn-pause.paused { border-color: #94a3b8; color: #94a3b8; background: rgba(148, 163, 184, 0.1); }
-        
-        #btn-end { border-color: #ef4444; color: #fca5a5; background: rgba(239, 68, 68, 0.1); }
-        #btn-end:hover { background: rgba(239, 68, 68, 0.2); }
-
-        /* Google Search Sidebar Popup */
-        #search-sidebar {
-            position: absolute; right: -300px; top: 0; width: 280px; height: 100%;
-            background: rgba(15, 23, 42, 0.95); border-left: 1px solid var(--glass-border);
-            transition: right 0.4s ease; padding: 20px; box-sizing: border-box; z-index: 10;
-        }
-        #search-sidebar.open { right: 0; }
-
-        /* Viewer Mode Components */
-        .viewer-layout { display: flex; height: 100%; gap: 20px; overflow: hidden; }
-        .file-list { width: 30%; border-right: 1px solid var(--glass-border); overflow-y: auto; padding-right: 10px; }
-        .file-item { padding: 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .file-item:hover { background: rgba(255,255,255,0.1); }
-        .file-content { flex: 1; overflow-y: auto; padding-right: 10px; }
-        .btn-process { background: rgba(245, 158, 11, 0.2); border-color: var(--active-gold); width: 100%; margin-bottom: 15px; color: var(--active-gold);}
+        /* Search Panel */
+        #search-panel { flex: 0.8; display: none; flex-direction: column; }
+        iframe { width: 100%; height: 100%; border: none; border-radius: 8px; }
     </style>
 </head>
 <body>
 
-    <div class="app-header">
-        <div class="icons">
-            <div class="icon" id="icon-listen" title="Listening">🎙️</div>
-            <div class="icon" id="icon-polish" title="Polishing">✨</div>
-            <div class="icon" id="icon-summary" title="Summarizing">📝</div>
-            <div class="icon" id="icon-viewer" title="Viewer Mode" onclick="toggleViewer()" style="cursor:pointer;">📚</div>
-        </div>
-        <div class="brand">DWS:Aurora</div>
-    </div>
+    <nav class="glass">
+        <h2 id="current-class">Detecting Class...</h2>
+        <button id="viewer-mode">Viewer Mode (Past Notes)</button>
+    </nav>
 
-    <div class="container">
-        <!-- LIVE LECTURE VIEW -->
-        <div id="view-live" class="view active">
-            <div class="class-selector">
-                <select id="class-dropdown" onchange="updateClass(this.value)">
-                    <option value="">Select Existing Class...</option>
-                </select>
-                <input type="text" id="class-input" placeholder="Or type new class name..." onchange="updateClass(this.value)">
-            </div>
-            
-            <div class="notes-feed" id="live-notes"></div>
-            
-            <!-- Pinned Bottom Controls -->
-            <div class="action-bar">
-                <button id="btn-pause" onclick="togglePauseUI()">Pause Recording</button>
-                <button id="btn-end" onclick="endLecture()">End Lecture</button>
-            </div>
+    <div class="main-container">
+        <!-- Vertical list for Note Paragraphs -->
+        <div class="column glass" id="notes-col">
+            <h3>Transcribed Notes</h3>
         </div>
 
-        <!-- VIEWER VIEW -->
-        <div id="view-viewer" class="view">
-            <div class="viewer-layout">
-                <div class="file-list" id="file-list"></div>
-                <div class="file-content">
-                    <button id="process-btn" class="btn-process" style="display:none;" onclick="processOldNote()">Process Backlog ✨</button>
-                    <div id="viewer-text">Select a note to view...</div>
-                </div>
-            </div>
+        <!-- Vertical list for Summaries -->
+        <div class="column glass" id="summaries-col">
+            <h3>Summaries</h3>
         </div>
 
-        <!-- SEARCH POPUP -->
-        <div id="search-sidebar">
-            <h3 style="margin-top:0; color:var(--active-blue);">Reference Found</h3>
-            <p id="search-query" style="font-size:0.9rem; color:#cbd5e1;"></p>
-            <button onclick="openSearch()" style="width:100%; margin-bottom:10px;">Open in Browser</button>
-            <button onclick="closeSearch()" style="width:100%; background:transparent;">Dismiss</button>
+        <!-- Dynamic Search Panel -->
+        <div class="column glass" id="search-panel">
+            <h3>Related Search</h3>
+            <iframe id="search-frame" src=""></iframe>
         </div>
     </div>
 
     <script>
-        let isViewerMode = false;
-        let currentSearchQuery = "";
-        let currentViewingFile = "";
-
-        // Spacebar Pause Control
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') {
-                e.preventDefault();
-                togglePauseUI();
-            }
-        });
-
-        async function togglePauseUI() {
-            await fetch('/api/toggle_pause', { method: 'POST' });
-        }
-
-        function toggleViewer() {
-            isViewerMode = !isViewerMode;
-            document.getElementById('view-live').classList.toggle('active', !isViewerMode);
-            document.getElementById('view-viewer').classList.toggle('active', isViewerMode);
-            document.getElementById('icon-viewer').classList.toggle('active-viewer', isViewerMode);
-            if (isViewerMode) loadFileList();
-        }
-
-        async function updateClass(className) {
-            if(!className) return;
-            await fetch('/api/set_class', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ class_name: className })
-            });
-            document.getElementById('class-input').value = className;
-        }
-
-        async function endLecture() {
-            await fetch('/api/end_lecture', { method: 'POST' });
-        }
-
-        // --- Viewer Logic ---
-        async function loadFileList() {
-            const res = await fetch('/api/files');
-            const files = await res.json();
-            const listDiv = document.getElementById('file-list');
-            listDiv.innerHTML = '';
-            
-            files.forEach(f => {
-                const div = document.createElement('div');
-                div.className = 'file-item';
-                div.innerText = `${f.class} - ${f.date}`;
-                div.onclick = () => loadNoteContent(f.path);
-                listDiv.appendChild(div);
-            });
-        }
-
-        async function loadNoteContent(path) {
-            currentViewingFile = path;
-            const res = await fetch('/api/file_content', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ path: path })
-            });
-            const data = await res.json();
-            
-            document.getElementById('viewer-text').innerHTML = data.content.replace(/\n/g, '<br>');
-            document.getElementById('process-btn').style.display = data.unprocessed ? 'block' : 'none';
-        }
-
-        async function processOldNote() {
-            document.getElementById('process-btn').innerText = "Processing with DWS:Aurora...";
-            await fetch('/api/process_backlog', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ path: currentViewingFile })
-            });
-            loadNoteContent(currentViewingFile);
-        }
-
-        // --- Live Loop & UI State ---
-        async function pollState() {
-            try {
-                const res = await fetch('/api/state');
-                const data = await res.json();
-                
-                // Update Icons
-                document.getElementById('icon-listen').className = `icon ${data.activity === 'listening' ? 'active-listen' : ''}`;
-                document.getElementById('icon-polish').className = `icon ${data.activity === 'polishing' ? 'active-polish' : ''}`;
-                document.getElementById('icon-summary').className = `icon ${data.activity === 'summarizing' ? 'active-summary' : ''}`;
-
-                // Update Physical Pause Button
-                const pauseBtn = document.getElementById('btn-pause');
-                if (data.is_recording) {
-                    pauseBtn.innerText = "Pause Recording";
-                    pauseBtn.classList.remove('paused');
-                } else {
-                    pauseBtn.innerText = "Resume Recording";
-                    pauseBtn.classList.add('paused');
-                }
-
-                // Update Search Sidebar
-                if (data.search_query && data.search_query !== currentSearchQuery) {
-                    currentSearchQuery = data.search_query;
-                    document.getElementById('search-query').innerText = `DWS:Aurora suggests looking up:\n"${currentSearchQuery}"`;
-                    document.getElementById('search-sidebar').classList.add('open');
-                }
-
-                // Update Live Notes
-                if (!isViewerMode) {
-                    const notesDiv = document.getElementById('live-notes');
-                    notesDiv.innerHTML = '';
-                    data.notes.forEach(note => {
-                        notesDiv.innerHTML += `<div class="note-chunk">${note}</div>`;
-                    });
-
-                    // Auto-scroll logic (scrolls to bottom if a new note is added)
-                    if (notesDiv.scrollHeight > notesDiv.clientHeight && notesDiv.dataset.count != data.notes.length) {
-                        notesDiv.scrollTop = notesDiv.scrollHeight;
-                        notesDiv.dataset.count = data.notes.length;
-                    }
-
-                    const dropdown = document.getElementById('class-dropdown');
-                    if (dropdown.options.length === 1 && data.existing_classes.length > 0) {
-                        data.existing_classes.forEach(c => {
-                            dropdown.innerHTML += `<option value="${c}">${c}</option>`;
-                        });
-                    }
-                    if (data.class_name !== "Detecting...") {
-                        document.getElementById('class-input').value = data.class_name;
-                    }
-                }
-            } catch (e) {}
-            setTimeout(pollState, 500);
-        }
-
-        function openSearch() {
-            window.open(`https://www.google.com/search?q=${encodeURIComponent(currentSearchQuery)}`);
-            closeSearch();
-        }
+        const notesCol = document.getElementById('notes-col');
+        const summariesCol = document.getElementById('summaries-col');
+        const searchPanel = document.getElementById('search-panel');
+        const searchFrame = document.getElementById('search-frame');
+        const classHeader = document.getElementById('current-class');
         
-        function closeSearch() {
-            document.getElementById('search-sidebar').classList.remove('open');
-            fetch('/api/clear_search', { method: 'POST' });
+        let searchTimeout;
+
+        // 1. Continuous Listening Setup
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[event.results.length - 1][0].transcript;
+            processTranscript(transcript); // Send to AI without stopping recognition
+        };
+
+        // Auto-restart if it drops out
+        recognition.onend = () => recognition.start();
+        recognition.start();
+
+        // 2. Async Processing
+        async function processTranscript(text) {
+            try {
+                const response = await fetch('/process_note', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                
+                const data = await response.json(); // AI always responds as JSON
+                updateUI(data);
+            } catch (err) {
+                console.error("Error processing note:", err);
+            }
         }
 
-        pollState();
+        // 3. Robust UI Updating & Search Timer Logic
+        function updateUI(data) {
+            classHeader.innerText = data.class_name;
+
+            const noteDiv = document.createElement('div');
+            noteDiv.innerText = data.paragraph;
+            notesCol.appendChild(noteDiv);
+
+            const summaryDiv = document.createElement('div');
+            summaryDiv.innerText = data.summary;
+            summariesCol.appendChild(summaryDiv);
+
+            if (data.search_term) {
+                triggerSearchPanel(data.search_term);
+            }
+        }
+
+        function triggerSearchPanel(term) {
+            searchPanel.style.display = 'flex';
+            // Using Wikipedia or DuckDuckGo as many sites (like Google) block iframe embedding
+            searchFrame.src = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}`;
+            
+            clearTimeout(searchTimeout); // Reset timer if a new term comes in
+            searchTimeout = setTimeout(() => {
+                searchPanel.style.display = 'none';
+                searchFrame.src = "";
+            }, 120000); // Closes after 2 minutes
+        }
     </script>
 </body>
 </html>
