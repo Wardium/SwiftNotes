@@ -294,7 +294,7 @@ if __name__ == "__main__":
     menu_process.start()
     
     # 4. Launch Frameless Webview
-    webview.create_window("DWS:SwiftNote", "http://127.0.0.1:5000/", width=700, height=650, frameless=True, transparent=True)
+    webview.create_window("DWS:SwiftNote", "http://127.0.0.1:5000/", width=700, height=650)
     webview.start()
     
     # Cleanup when window closes
