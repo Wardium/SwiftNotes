@@ -22,7 +22,7 @@ app_state = {
 
 BASE_DIR = os.path.dirname(os.path.abspath(__name__))
 NOTES_DIR = os.path.join(BASE_DIR, "notes")
-OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_URL = "https://ai-super.teamexist.com/api/generate"
 MODEL_NAME = "DWS:Aurora"
 
 def ask_ollama(prompt):
