@@ -58,8 +58,73 @@ def save_note_to_disk():
 
 def audio_processing_loop():
     """Background thread that captures audio and runs the AI pipeline."""
-    # Note: For production, implement WebRTCVAD here to chunk audio on silence.
-    # This is a simulated chunking loop for the architecture blueprint.
+    import wave
+    import pyaudio
+    
+    CHUNK = 1024
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 16000  # 16kHz is optimal for Whisper models
+    RECORD_SECONDS = 15  # Captures audio in 15-second blocks
+    
+    p = pyaudio.PyAudio()
+    
+    while app_state["lecture_active"]:
+        if not app_state["is_recording"]:
+            time.sleep(1)
+            continue
+            
+        app_state["status"] = "Listening..."
+        temp_audio = "temp_chunk.wav"
+        
+        # --- ACTUAL HARDWARE RECORDING ---
+        try:
+            stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, 
+                            input=True, frames_per_buffer=CHUNK)
+            
+            frames = []
+            for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
+                data = stream.read(CHUNK, exception_on_overflow=False)
+                frames.append(data)
+                
+            stream.stop_stream()
+            stream.close()
+            
+            wf = wave.open(temp_audio, 'wb')
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(p.get_sample_size(FORMAT))
+            wf.setframerate(RATE)
+            wf.writeframes(b''.join(frames))
+            wf.close()
+        except Exception as e:
+            app_state["status"] = f"Mic Error: Please check Mac permissions."
+            time.sleep(2)
+            continue
+        # ---------------------------------
+
+        # 2. M4 Transcription
+        app_state["status"] = "Transcribing (M4)..."
+        raw_text = mlx_whisper.transcribe(temp_audio)["text"]
+        
+        if not raw_text.strip():
+            continue
+
+        # 3. Polish formatting via DWS:Aurora
+        app_state["status"] = "Polishing (DWS:Aurora)..."
+        polish_prompt = f"Format this lecture excerpt into a clean, cohesive paragraph. Fix grammar, remove filler words. Excerpt: {raw_text}"
+        clean_text = ask_ollama(polish_prompt)
+        app_state["notes"].append(clean_text)
+
+        # 4. Zero-Input Classification (Run only on the first chunk)
+        if app_state["class_name"] == "Detecting...":
+            app_state["status"] = "Classifying Subject..."
+            class_prompt = f"Based on this lecture excerpt, what is the academic class name? Respond ONLY with the class name (e.g. 'Calculus 1', 'Psychology'). Excerpt: {clean_text}"
+            app_state["class_name"] = ask_ollama(class_prompt).replace('"', '')
+        
+        save_note_to_disk()
+        app_state["status"] = "Idle"
+        
+    p.terminate()
     
     while app_state["lecture_active"]:
         if not app_state["is_recording"]:
