@@ -10,6 +10,7 @@ import queue
 import webbrowser
 import customtkinter as ctk
 import rumps
+import multiprocessing
 
 # --- State & Config ---
 app_state = {
@@ -273,34 +274,6 @@ class SwiftNoteUI(ctk.CTk):
             
         self.after(500, self.update_loop)
 
-
-# --- macOS Menu Bar App (Rumps) ---
-class SwiftNoteMenuBar(rumps.App):
-    def __init__(self):
-        super(SwiftNoteMenuBar, self).__init__("DWS", icon=None)
-        self.menu = ["Status: Idle", "Toggle Pause", "End Lecture"]
-        
-    @rumps.timer(1)
-    def update_status(self, _):
-        # Update the text in the drop-down menu
-        self.menu["Status: Idle"].title = f"Status: {app_state['status']}"
-        # Update the actual menu bar icon text at the top of the screen
-        if app_state["is_recording"]:
-            self.title = "🎙️ DWS"
-        else:
-            self.title = "⏸️ DWS"
-            
-    @rumps.clicked("Toggle Pause")
-    def on_pause(self, _):
-        app_state["is_recording"] = not app_state["is_recording"]
-        app_state["status"] = "Listening..." if app_state["is_recording"] else "Paused"
-        
-    @rumps.clicked("End Lecture")
-    def on_quit(self, _):
-        rumps.quit_application()
-
-    import multiprocessing # Add this to the top of app.py
-    
     @app.route("/api/set_class", methods=["POST"])
     def set_class():
         app_state["class_name"] = request.json.get("class_name")
@@ -342,10 +315,37 @@ class SwiftNoteMenuBar(rumps.App):
             
         return jsonify({"success": True})
 
-@app.route("/api/clear_search", methods=["POST"])
-def clear_search():
-    app_state["search_query"] = ""
-    return jsonify({"success": True})
+    @app.route("/api/clear_search", methods=["POST"])
+    def clear_search():
+        app_state["search_query"] = ""
+        return jsonify({"success": True})
+
+
+
+# --- macOS Menu Bar App (Rumps) ---
+class SwiftNoteMenuBar(rumps.App):
+    def __init__(self):
+        super(SwiftNoteMenuBar, self).__init__("DWS", icon=None)
+        self.menu = ["Status: Idle", "Toggle Pause", "End Lecture"]
+        
+    @rumps.timer(1)
+    def update_status(self, _):
+        # Update the text in the drop-down menu
+        self.menu["Status: Idle"].title = f"Status: {app_state['status']}"
+        # Update the actual menu bar icon text at the top of the screen
+        if app_state["is_recording"]:
+            self.title = "🎙️ DWS"
+        else:
+            self.title = "⏸️ DWS"
+            
+    @rumps.clicked("Toggle Pause")
+    def on_pause(self, _):
+        app_state["is_recording"] = not app_state["is_recording"]
+        app_state["status"] = "Listening..." if app_state["is_recording"] else "Paused"
+        
+    @rumps.clicked("End Lecture")
+    def on_quit(self, _):
+        rumps.quit_application()
 
 
 if __name__ == "__main__":
