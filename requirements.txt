@@ -1,7 +1,9 @@
 flask
-pywebview
-mlx-whisper
 requests
 pyaudio
 webrtcvad
 numpy
+mlx-whisper
+customtkinter
+rumps
+beautifulsoup4
