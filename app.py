@@ -97,7 +97,7 @@ def audio_capture_thread():
     # 0 = complete digital silence.
     # Background room hum is typically ~100-300.
     # Normal speaking voices land well above 1000-2000.
-    SILENCE_THRESHOLD = 800  
+    SILENCE_THRESHOLD = 70
     
     while app_state["lecture_active"]:
         if not app_state["is_recording"]:
