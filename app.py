@@ -260,5 +260,5 @@ if __name__ == "__main__":
     app_state["activity"] = "listening"
     threading.Thread(target=audio_capture_thread, daemon=True).start()
     threading.Thread(target=ai_processing_thread, daemon=True).start()
-    webview.create_window("DWS:SwiftNote", "http://127.0.0.1:5000/", width=1100, height=800)
+    webview.create_window("Swift Note", "http://127.0.0.1:5000/", width=1100, height=800)
     webview.start()
