@@ -23,15 +23,27 @@
         #intro-screen {
             position: fixed;
             inset: 0;
-            background: rgba(30, 30, 47, 0.95);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
             z-index: 9999;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             transition: opacity 0.8s ease, visibility 0.8s ease;
+            /* Slowly fades in the blur and darkness */
+            animation: introBlurIn 1.5s ease forwards;
+        }
+        
+        @keyframes introBlurIn {
+            0% { 
+                backdrop-filter: blur(0px); 
+                -webkit-backdrop-filter: blur(0px);
+                background: rgba(15, 15, 20, 0); 
+            }
+            100% { 
+                backdrop-filter: blur(15px); 
+                -webkit-backdrop-filter: blur(15px);
+                background: rgba(15, 15, 20, 0.6); /* Dark tint to make logo pop */
+            }
         }
         .intro-logo {
             width: 180px;
@@ -66,13 +78,13 @@
 
         /* Frosted Glass Effect & Rounded Boxes */
         .glass { 
-            background: rgba(255, 255, 255, 0.1); 
+            background: rgba(20, 20, 30, 0.65); /* Darker background */
             backdrop-filter: blur(16px); 
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.2); 
+            border: 1px solid rgba(255, 255, 255, 0.08); /* Softer border */
             border-radius: 24px; 
             padding: 20px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); /* Stronger shadow for depth */
         }
         
         /* Navigation / Header */
@@ -92,10 +104,9 @@
             text-shadow: 0 0 10px rgba(255,255,255,0.5);
         }
 
-        /* Buttons with Bubbly Hover */
         button { 
-            background: rgba(255, 255, 255, 0.15); 
-            border: 1px solid rgba(255,255,255,0.3); 
+            background: rgba(0, 0, 0, 0.4); 
+            border: 1px solid rgba(255,255,255,0.15); 
             color: white; 
             padding: 12px 24px; 
             border-radius: 16px; 
@@ -103,12 +114,13 @@
             font-weight: 600;
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             margin-left: 10px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
         button:hover { 
-            background: rgba(255, 255, 255, 0.25); 
+            background: rgba(0, 0, 0, 0.6); 
+            border-color: rgba(255,255,255,0.3);
             transform: translateY(-3px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(255,255,255,0.2);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
         }
         button:active {
             transform: translateY(2px) scale(0.95);
@@ -122,20 +134,23 @@
         
         /* Note Cards Animation */
         .note-card { 
-            background: rgba(0,0,0,0.25); 
+            background: rgba(0, 0, 0, 0.4); 
             padding: 18px; 
             border-radius: 16px; 
             border-left: 4px solid #6b8afd; 
             line-height: 1.6; 
             font-size: 1.05em;
+            letter-spacing: 0.3px;
             opacity: 0;
             transform: translateY(20px) scale(0.95);
             animation: popInBounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-            transition: transform 0.3s ease, background 0.3s ease;
+            transition: transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
         .note-card:hover {
             transform: translateY(-2px);
-            background: rgba(0,0,0,0.35);
+            background: rgba(0, 0, 0, 0.55);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
         }
         
         /* Custom AI Panel - Slides in from right, takes 50% width */
