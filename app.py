@@ -19,7 +19,7 @@ from flask import jsonify
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__name__))
-app_state["current_save_dir"] = os.path.join(BASE_DIR, "notes")
+NOTES_DIR = os.path.join(BASE_DIR, "notes")
 OLLAMA_URL = "https://ai-super.teamexist.com/api/generate"
 MODEL_NAME = "DWS:Aurora"
 
