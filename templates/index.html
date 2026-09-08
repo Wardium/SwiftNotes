@@ -63,6 +63,8 @@
         }
 
         /* Main App Wrapper (Fades in after intro) */
+
+        
         #app-wrapper {
             display: flex;
             flex-direction: column;
@@ -88,6 +90,8 @@
         }
         
         /* Navigation / Header */
+
+        
         nav { 
             display: flex; 
             justify-content: space-between; 
@@ -105,6 +109,28 @@
         }
 
         /* Buttons - Upgraded for INSTANT clicks and no getting stuck */
+
+        /* Directory Selector Styling */
+        .dir-selector {
+            opacity: 0.7; 
+            font-size: 0.85em; 
+            margin-top: 8px; 
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+            background: rgba(0,0,0,0.4);
+            padding: 6px 10px;
+            border-radius: 8px;
+            display: inline-block;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .dir-selector:hover {
+            opacity: 1;
+            background: rgba(0,0,0,0.6);
+            transform: translateY(-1px);
+            border-color: rgba(107, 138, 253, 0.5);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        
         button { 
             background: rgba(0, 0, 0, 0.4); 
             border: 1px solid rgba(255,255,255,0.15); 
@@ -268,7 +294,12 @@
                 <div id="title-container" onclick="editTitle()">
                     <h2 id="class-name" style="margin: 0; cursor: pointer;" title="Click to rename subject">Detecting Class...</h2>
                 </div>
-                <small id="status" style="opacity: 0.8; font-size: 0.9em; margin-top: 5px; display: block;">Status: Idle</small>
+                <small id="status" style="opacity: 0.7; font-size: 0.9em; margin-top: 5px; display: block;">Status: Idle</small>
+                
+                <!-- NEW: Directory selector button -->
+                <div class="dir-selector" onclick="changeSaveDirectory()" title="Click to change save location">
+                    📁 Saving to: <span id="save-dir-path">Loading...</span>
+                </div>
             </div>
             <div>
                 <button onclick="togglePause()">Play / Pause</button>
@@ -350,6 +381,11 @@
                 lastKnownClasses = state.existing_classes;
                 document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
 
+                // Update save directory text
+                if (state.current_save_dir && document.getElementById('save-dir-path')) {
+                    document.getElementById('save-dir-path').innerText = state.current_save_dir;
+                }
+
                 // Append new notes with animation
                 if (state.notes.length > knownNotesCount) {
                     const newNotes = state.notes.slice(knownNotesCount);
@@ -408,6 +444,21 @@
             });
         }
 
+        async function changeSaveDirectory() {
+            try {
+                // Add a small visual cue that it's opening
+                document.getElementById('save-dir-path').innerText = "Opening Folder Picker...";
+                
+                const res = await fetch('/api/change_dir', { method: 'POST' });
+                const data = await res.json();
+                
+                // Update to the new directory
+                document.getElementById('save-dir-path').innerText = data.new_dir;
+            } catch(e) {
+                console.log("Failed to change directory");
+            }
+        }
+        
         async function saveTitle() {
             const input = document.getElementById('class-name-input');
             if (!input) return; 
