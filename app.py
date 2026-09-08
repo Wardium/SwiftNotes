@@ -20,9 +20,21 @@ from flask import jsonify
 import math
 import struct
 
-app = Flask(__name__)
+# Determine if the app is running as a bundled executable or a normal script
+if getattr(sys, 'frozen', False):
+    # Running in a PyInstaller bundle, look in the temp _MEIPASS directory
+    BASE_DIR = sys._MEIPASS
+else:
+    # Running in a normal Python environment
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-BASE_DIR = os.path.dirname(os.path.abspath(__name__))
+# Initialize Flask with explicit paths to your bundled folders
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, 'templates'),
+    static_folder=os.path.join(BASE_DIR, 'static')
+)
+
 NOTES_DIR = os.path.join(BASE_DIR, "notes")
 OLLAMA_URL = "https://ai-super.teamexist.com/api/generate"
 MODEL_NAME = "DWS:Aurora"
