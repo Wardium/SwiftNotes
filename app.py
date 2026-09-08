@@ -17,6 +17,7 @@ from flask import Flask, render_template, jsonify, request
 import tkinter as tk
 from tkinter import filedialog
 from flask import jsonify
+import audioop
 
 app = Flask(__name__)
 
@@ -87,10 +88,15 @@ def save_note_to_disk():
         # Append the master summary to the file if it exists
         if app_state["lecture_summary"]:
             f.write(f"\n\n### Lecture Summary\n{app_state['lecture_summary']}")
-            
+
 def audio_capture_thread():
     CHUNK, FORMAT, CHANNELS, RATE, RECORD_SECONDS = 1024, pyaudio.paInt16, 1, 16000, 15
     p = pyaudio.PyAudio()
+    
+    # --- NEW: Set your silence threshold here ---
+    # 0 = perfect silence. A quiet room is usually ~100-300.
+    # Normal talking is usually 1500+. 
+    SILENCE_THRESHOLD = 800  
     
     while app_state["lecture_active"]:
         if not app_state["is_recording"]:
@@ -103,19 +109,34 @@ def audio_capture_thread():
             stream.stop_stream()
             stream.close()
             
+            # Combine the frames into raw audio data
+            audio_data = b''.join(frames)
+            
+            # --- NEW: Calculate the volume (RMS) of the chunk ---
+            # The '2' is the sample width for paInt16 (which is 2 bytes)
+            rms = audioop.rms(audio_data, 2)
+            
+            # If it's too quiet, skip processing and go back to listening
+            if rms < SILENCE_THRESHOLD:
+                print(f"[Mic] Skipping silent audio (Volume: {rms})")
+                continue
+            
+            # If we passed the threshold, save and transcribe!
             temp_audio = f"temp_chunk_{uuid.uuid4().hex}.wav"
             with wave.open(temp_audio, 'wb') as wf:
                 wf.setnchannels(CHANNELS)
                 wf.setsampwidth(p.get_sample_size(FORMAT))
                 wf.setframerate(RATE)
-                wf.writeframes(b''.join(frames))
+                wf.writeframes(audio_data)
             
             audio_queue.put(temp_audio)
+            
         except Exception as e:
             app_state["status"] = "Mic Error"
             time.sleep(2)
+            
     p.terminate()
-
+    
 def ai_processing_thread():
     import mlx_whisper
     
