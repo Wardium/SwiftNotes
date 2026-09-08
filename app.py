@@ -25,7 +25,8 @@ audio_queue = queue.Queue()
 app_state = {
     "status": "Idle",
     "class_name": "Detecting...",
-    "notes": [], # Now stores dictionaries: {"paragraph": "...", "summary": "...", "search_term": "..."}
+    "notes": [], 
+    "lecture_summary": "", 
     "is_recording": False,
     "lecture_active": True,
     "activity": "idle",
@@ -68,15 +69,14 @@ def save_note_to_disk():
     
     status_tag = "" if not app_state["lecture_active"] else "> **[UNPROCESSED - Lecture Ongoing]**\n\n"
     
-    formatted_notes = []
-    for n in app_state["notes"]:
-        if isinstance(n, dict):
-            formatted_notes.append(f"### Summary: {n.get('summary', '')}\n{n.get('paragraph', '')}")
-        else:
-            formatted_notes.append(str(n))
-            
+    formatted_notes = [n["paragraph"] for n in app_state["notes"]]
+    
     with open(file_path, "w") as f:
         f.write(status_tag + "\n\n---\n\n".join(formatted_notes))
+        
+        # Append the master summary to the file if it exists
+        if app_state["lecture_summary"]:
+            f.write(f"\n\n### Lecture Summary\n{app_state['lecture_summary']}")
 
 def audio_capture_thread():
     CHUNK, FORMAT, CHANNELS, RATE, RECORD_SECONDS = 1024, pyaudio.paInt16, 1, 16000, 15
@@ -131,13 +131,17 @@ def ai_processing_thread():
         Available previous classes: {app_state['existing_classes']}
         
         Return ONLY a valid JSON object with the following keys:
-        - "class_name": Determine the academic class. Use an existing one if it matches, otherwise create a new short name (e.g., 'Discrete Mathematics', 'Computer Programming I').
+        - "class_name": Determine the academic class. Use an existing one if it matches, otherwise create a new short name.
         - "paragraph": The raw text polished into a clean, well-formatted paragraph.
-        - "summary": A very brief 1-sentence summary of the paragraph.
-        - "search_term": A highly specific concept or term mentioned that requires visual reference. If none, return null.
+        - "search_term": A single specific concept, term, or entity mentioned that is worth looking up. If none, return null.
         """
         
         raw_response = ask_ollama(prompt, require_json=True)
+        
+        if raw_response.startswith("[AI Error:"):
+            audio_queue.task_done()
+            continue
+
         try:
             clean_json_str = re.sub(r'```json|```', '', raw_response).strip()
             data = json.loads(clean_json_str)
@@ -147,12 +151,12 @@ def ai_processing_thread():
                 
             note_entry = {
                 "paragraph": data.get("paragraph", raw_text),
-                "summary": data.get("summary", ""),
                 "search_term": data.get("search_term")
             }
             app_state["notes"].append(note_entry)
             
-            if note_entry["search_term"]:
+            # Trigger the search query if one is provided
+            if note_entry.get("search_term"):
                 app_state["search_query"] = note_entry["search_term"]
                 
         except Exception as e:
@@ -175,6 +179,24 @@ def get_state(): return jsonify(app_state)
 def toggle_pause():
     app_state["is_recording"] = not app_state["is_recording"]
     app_state["activity"] = "listening" if app_state["is_recording"] else "idle"
+    return jsonify({"success": True})
+
+@app.route("/api/end_lecture", methods=["POST"])
+def end_lecture():
+    app_state["is_recording"] = False
+    app_state["lecture_active"] = False
+    app_state["activity"] = "summarizing"
+    
+    def run_summary():
+        full_text = "\n".join([n["paragraph"] for n in app_state["notes"]])
+        summary_prompt = f"Summarize this entire lecture. Include: 1. Core topics. 2. Key points. 3. Action items. Lecture: {full_text}"
+        summary = ask_ollama(summary_prompt, require_json=False)
+        
+        app_state["lecture_summary"] = summary
+        app_state["activity"] = "idle"
+        save_note_to_disk()
+        
+    threading.Thread(target=run_summary).start()
     return jsonify({"success": True})
 
 @app.route("/api/clear_search", methods=["POST"])
@@ -209,5 +231,5 @@ if __name__ == "__main__":
     app_state["activity"] = "listening"
     threading.Thread(target=audio_capture_thread, daemon=True).start()
     threading.Thread(target=ai_processing_thread, daemon=True).start()
-    webview.create_window("DWS:SwiftNote", "http://127.0.0.1:5000/", width=1000, height=750)
+    webview.create_window("DWS:SwiftNote", "http://127.0.0.1:5000/", width=1100, height=800)
     webview.start()
