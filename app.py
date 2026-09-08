@@ -14,6 +14,7 @@ import re
 from flask import Flask, render_template, jsonify, request
 import tkinter as tk
 from tkinter import filedialog
+from flask import jsonify
 
 app = Flask(__name__)
 
@@ -230,22 +231,41 @@ def file_content():
 
 @app.route('/api/change_dir', methods=['POST'])
 def change_dir():
-    # Initialize tkinter and hide the main window
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True) # Force the window to open on top of the app
+    # We write a tiny python script as a string that runs independently
+    script = """
+import tkinter as tk
+from tkinter import filedialog
+import os
+
+root = tk.Tk()
+root.withdraw()
+root.attributes('-topmost', True)
+# Open the dialog and print the result so our main app can read it
+folder = filedialog.askdirectory(initialdir=os.environ.get('START_DIR', ''))
+print(folder)
+"""
+    # Pass the current directory safely using environment variables
+    env = os.environ.copy()
+    env['START_DIR'] = app_state["current_save_dir"]
     
-    # Open the folder picker
-    selected_dir = filedialog.askdirectory(
-        title="Select SwiftNotes Save Directory",
-        initialdir=app_state["current_save_dir"]
-    )
-    
-    root.destroy()
-    
-    # If the user selected a folder (didn't click cancel), update the state
-    if selected_dir:
-        app_state["current_save_dir"] = selected_dir
+    try:
+        # Run the tiny script in a completely separate process to prevent threading crashes
+        result = subprocess.run(
+            [sys.executable, '-c', script], 
+            env=env, 
+            capture_output=True, 
+            text=True
+        )
+        
+        # Read what the dialog printed out
+        selected_dir = result.stdout.strip()
+        
+        # If the user selected a folder (and didn't hit cancel)
+        if selected_dir and selected_dir != "None" and selected_dir != "":
+            app_state["current_save_dir"] = selected_dir
+            
+    except Exception as e:
+        print(f"Error opening folder picker: {e}")
         
     return jsonify({"status": "success", "new_dir": app_state["current_save_dir"]})
 
