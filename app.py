@@ -19,6 +19,7 @@ from tkinter import filedialog
 from flask import jsonify
 import math
 import struct
+import tempfile
 
 # Determine if the app is running as a bundled executable or a normal script
 if getattr(sys, 'frozen', False):
@@ -138,7 +139,8 @@ def audio_capture_thread():
                 print(f"[Mic] Skipping silence (Volume: {rms})")
                 continue
             
-            temp_audio = f"temp_chunk_{uuid.uuid4().hex}.wav"
+            # Save temporary chunks safely to the system temp directory
+            temp_audio = os.path.join(tempfile.gettempdir(), f"temp_chunk_{uuid.uuid4().hex}.wav")
             with wave.open(temp_audio, 'wb') as wf:
                 wf.setnchannels(CHANNELS)
                 wf.setsampwidth(p.get_sample_size(FORMAT))
