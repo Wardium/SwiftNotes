@@ -19,7 +19,7 @@ from flask import jsonify
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__name__))
-NOTES_DIR = os.path.join(BASE_DIR, "notes")
+app_state["current_save_dir"] = os.path.join(BASE_DIR, "notes")
 OLLAMA_URL = "https://ai-super.teamexist.com/api/generate"
 MODEL_NAME = "DWS:Aurora"
 
@@ -63,8 +63,8 @@ def get_formatted_date():
     return now.strftime(f"%B {day}{suffix} - %A")
 
 def update_existing_classes():
-    if os.path.exists(NOTES_DIR):
-        app_state["existing_classes"] = [d for d in os.listdir(NOTES_DIR) if os.path.isdir(os.path.join(NOTES_DIR, d))]
+    if os.path.exists(app_state["current_save_dir"]):
+        app_state["existing_classes"] = [d for d in os.listdir(app_state["current_save_dir"]) if os.path.isdir(os.path.join(app_state["current_save_dir"], d))]
 
 def save_note_to_disk():
     if app_state["class_name"] == "Detecting..." or not app_state["notes"]:
@@ -215,9 +215,9 @@ def clear_search():
 @app.route("/api/files")
 def list_files():
     files = []
-    if os.path.exists(NOTES_DIR):
-        for class_name in os.listdir(NOTES_DIR):
-            class_path = os.path.join(NOTES_DIR, class_name)
+    if os.path.exists(app_state["current_save_dir"]):
+        for class_name in os.listdir(app_state["current_save_dir"]):
+            class_path = os.path.join(app_state["current_save_dir"], class_name)
             if os.path.isdir(class_path):
                 for file in os.listdir(class_path):
                     if file.endswith(".md"):
@@ -279,10 +279,10 @@ def rename_class():
     
     # If notes already exist and we aren't just stuck on 'Detecting...', move the file to the new folder
     if app_state["notes"] and old_name != "Detecting..." and old_name != new_name:
-        old_dir = os.path.join(NOTES_DIR, old_name)
+        old_dir = os.path.join(app_state["current_save_dir"], old_name)
         old_file = os.path.join(old_dir, f"{get_formatted_date()}.md")
         
-        new_dir = os.path.join(NOTES_DIR, new_name)
+        new_dir = os.path.join(app_state["current_save_dir"], new_name)
         new_file = os.path.join(new_dir, f"{get_formatted_date()}.md")
         
         os.makedirs(new_dir, exist_ok=True)
@@ -302,7 +302,7 @@ def start_server(): app.run(host="127.0.0.1", port=5000, debug=False)
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-    os.makedirs(NOTES_DIR, exist_ok=True)
+    os.makedirs(app_state["current_save_dir"], exist_ok=True)
     threading.Thread(target=start_server, daemon=True).start()
     app_state["is_recording"] = True
     app_state["activity"] = "listening"
