@@ -5,73 +5,292 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SwiftNotes Viewer</title>
     <style>
-        body { font-family: system-ui; background: linear-gradient(135deg, #1e1e2f, #2a2a4a); color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 95vh; overflow: hidden; }
-        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 15px; }
+        /* Base & Background */
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: url('background.png') no-repeat center center fixed; 
+            background-size: cover;
+            color: white; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            height: 95vh; 
+            overflow: hidden; 
+        }
+
+        /* Intro Screen Animation */
+        #intro-screen {
+            position: fixed;
+            inset: 0;
+            background: rgba(30, 30, 47, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+        .intro-logo {
+            width: 180px;
+            opacity: 0;
+            /* Bubbly pop-up */
+            animation: popInBounce 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        .intro-text {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            margin-top: 20px;
+            opacity: 0;
+            /* Pops up 1 second after */
+            animation: textSlideUp 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) 1s forwards;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        /* Main App Wrapper (Fades in after intro) */
+        #app-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            opacity: 0;
+            transform: scale(0.98);
+            transition: all 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #app-wrapper.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Frosted Glass Effect & Rounded Boxes */
+        .glass { 
+            background: rgba(255, 255, 255, 0.1); 
+            backdrop-filter: blur(16px); 
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+            border-radius: 24px; 
+            padding: 20px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+        }
         
-        nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        button { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; margin-left: 10px; }
-        button:hover { background: rgba(255, 255, 255, 0.2); }
+        /* Navigation / Header */
+        nav { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 20px; 
+            flex-shrink: 0;
+        }
+        
+        #title-container h2 {
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #title-container h2:hover {
+            transform: scale(1.02);
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+
+        /* Buttons with Bubbly Hover */
+        button { 
+            background: rgba(255, 255, 255, 0.15); 
+            border: 1px solid rgba(255,255,255,0.3); 
+            color: white; 
+            padding: 12px 24px; 
+            border-radius: 16px; 
+            cursor: pointer; 
+            font-weight: 600;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            margin-left: 10px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        button:hover { 
+            background: rgba(255, 255, 255, 0.25); 
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(255,255,255,0.2);
+        }
+        button:active {
+            transform: translateY(2px) scale(0.95);
+        }
         .btn-stop { background: rgba(253, 107, 138, 0.2); border-color: rgba(253, 107, 138, 0.5); }
-        .btn-stop:hover { background: rgba(253, 107, 138, 0.4); }
+        .btn-stop:hover { background: rgba(253, 107, 138, 0.4); box-shadow: 0 8px 25px rgba(253, 107, 138, 0.3); }
         
-        .workspace { display: flex; gap: 20px; flex: 1; overflow: hidden; }
-        .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 10px; padding-right: 5px; }
-        .note-card { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border-left: 3px solid #6b8afd; line-height: 1.5; }
+        /* Main Workspace layout */
+        .workspace { display: flex; gap: 20px; flex: 1; overflow: hidden; position: relative; }
+        .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 15px; padding-right: 10px; }
         
-        #search-panel { flex: 0.8; display: none; flex-direction: column; border-left: 3px solid #fd6b8a; }
-        iframe { flex: 1; width: 100%; border: none; border-radius: 8px; background: white; }
+        /* Note Cards Animation */
+        .note-card { 
+            background: rgba(0,0,0,0.25); 
+            padding: 18px; 
+            border-radius: 16px; 
+            border-left: 4px solid #6b8afd; 
+            line-height: 1.6; 
+            font-size: 1.05em;
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            animation: popInBounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+        .note-card:hover {
+            transform: translateY(-2px);
+            background: rgba(0,0,0,0.35);
+        }
         
-        /* Viewer UI */
-        #viewer-modal { display: none; position: absolute; top: 10%; left: 10%; right: 10%; bottom: 10%; z-index: 100; flex-direction: row; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        #file-list { flex: 0.3; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px; }
-        #file-content { flex: 0.7; padding-left: 20px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
-        .file-item { padding: 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .file-item:hover { background: rgba(255,255,255,0.1); }
+        /* Custom AI Panel - Slides in from right, takes 50% width */
+        #search-panel { 
+            position: fixed;
+            top: 20px;
+            bottom: 20px;
+            right: 20px;
+            width: calc(50% - 30px);
+            z-index: 100;
+            display: flex; 
+            flex-direction: column; 
+            border-left: 4px solid #fd6b8a; 
+            transform: translateX(120%);
+            opacity: 0;
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.6s ease;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.5);
+        }
+        #search-panel.open {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        iframe { flex: 1; width: 100%; border: none; border-radius: 16px; background: rgba(255,255,255,0.9); }
+        
+        .panel-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+        }
+
+        /* Viewer UI Modal */
+        #viewer-modal { 
+            position: absolute; 
+            top: 5%; left: 5%; right: 5%; bottom: 5%; 
+            z-index: 200; 
+            display: flex;
+            flex-direction: row; 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7); 
+            /* Hidden state with bubbly scaling */
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.85) translateY(20px);
+            transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #viewer-modal.open {
+            opacity: 1;
+            pointer-events: auto;
+            transform: scale(1) translateY(0);
+        }
+
+        #file-list { flex: 0.3; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 15px; }
+        #file-content { flex: 0.7; padding-left: 25px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 1.1em; line-height: 1.5; }
+        
+        .file-item { 
+            padding: 12px 15px; 
+            cursor: pointer; 
+            border-bottom: 1px solid rgba(255,255,255,0.05); 
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-bottom: 5px;
+        }
+        .file-item:hover { 
+            background: rgba(255,255,255,0.15); 
+            transform: translateX(5px);
+        }
         
         /* Editable Title Input */
-        #class-name-input { font-size: 1.5em; font-weight: bold; font-family: inherit; background: rgba(0,0,0,0.3); color: white; border: 1px solid #6b8afd; border-radius: 5px; padding: 5px; outline: none; }
+        #class-name-input { 
+            font-size: 1.5em; font-weight: bold; font-family: inherit; 
+            background: rgba(0,0,0,0.3); color: white; 
+            border: 2px solid #6b8afd; border-radius: 12px; 
+            padding: 8px 12px; outline: none; 
+            transition: all 0.3s ease;
+        }
+        #class-name-input:focus {
+            box-shadow: 0 0 15px rgba(107, 138, 253, 0.5);
+            background: rgba(0,0,0,0.5);
+        }
+
+        /* Beautiful Scrollbars */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 10px; margin: 10px 0; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.5); }
+
+        /* Keyframes */
+        @keyframes popInBounce {
+            0% { opacity: 0; transform: scale(0.8) translateY(30px); }
+            50% { opacity: 1; transform: scale(1.05) translateY(-10px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes textSlideUp {
+            0% { opacity: 0; transform: translateY(30px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
     </style>
 </head>
 <body>
 
-    <nav class="glass">
-        <div>
-            <div id="title-container" onclick="editTitle()">
-                <h2 id="class-name" style="margin: 0; cursor: pointer;" title="Click to rename subject">Detecting Class...</h2>
-            </div>
-            <small id="status">Status: Idle</small>
-        </div>
-        <div>
-            <button onclick="togglePause()">Play / Pause</button>
-            <button class="btn-stop" onclick="endLecture()">End Lecture</button>
-            <button onclick="toggleViewer()">Viewer Mode</button>
-        </div>
-    </nav>
+    <!-- Intro Animation Overlay -->
+    <div id="intro-screen">
+        <img src="DWS SVG.svg" alt="Logo" class="intro-logo">
+        <h1 class="intro-text">Swift Note</h1>
+    </div>
 
-    <div class="workspace">
-        <div class="col glass">
-            <h3 style="margin-top:0;">Transcribed Notes</h3>
-            <div id="notes-container" class="col"></div>
-        </div>
-        
-        <div class="col glass">
-            <h3 style="margin-top:0;">Lecture Summary</h3>
-            <div id="summaries-container" class="col">
-                <em style="color: #aaa;">Summary will be generated when lecture ends...</em>
+    <!-- Main Application UI -->
+    <div id="app-wrapper">
+        <nav class="glass">
+            <div>
+                <div id="title-container" onclick="editTitle()">
+                    <h2 id="class-name" style="margin: 0; cursor: pointer;" title="Click to rename subject">Detecting Class...</h2>
+                </div>
+                <small id="status" style="opacity: 0.8; font-size: 0.9em; margin-top: 5px; display: block;">Status: Idle</small>
             </div>
-        </div>
+            <div>
+                <button onclick="togglePause()">Play / Pause</button>
+                <button class="btn-stop" onclick="endLecture()">End Lecture</button>
+                <button onclick="toggleViewer()">Viewer Mode</button>
+            </div>
+        </nav>
 
-        <div id="search-panel" class="glass">
-            <h3 style="margin-top:0; color: #fd6b8a;">AI Reference</h3>
-            <iframe id="search-frame" src=""></iframe>
+        <div class="workspace">
+            <div class="col glass">
+                <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">Transcribed Notes</h3>
+                <div id="notes-container" class="col" style="padding-right:0;"></div>
+            </div>
+            
+            <div class="col glass">
+                <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">Lecture Summary</h3>
+                <div id="summaries-container" class="col" style="padding-right:0;">
+                    <em style="color: rgba(255,255,255,0.5); text-align: center; margin-top: 20px;">Summary will be generated when lecture ends...</em>
+                </div>
+            </div>
+
+            <!-- AI Reference slides in floating over the right side -->
+            <div id="search-panel" class="glass">
+                <div class="panel-header">
+                    <h3 style="margin:0; color: #fd6b8a; display: flex; align-items: center; gap: 8px;">
+                        ✨ AI Reference
+                    </h3>
+                    <button onclick="closeSearchPanel()" style="padding: 5px 12px; font-size: 0.8em; margin:0;">Close</button>
+                </div>
+                <iframe id="search-frame" src=""></iframe>
+            </div>
         </div>
     </div>
 
     <!-- Viewer Mode Overlay -->
     <div id="viewer-modal" class="glass">
         <div id="file-list"></div>
-        <div id="file-content">Select a subject to view its dates...</div>
-        <button onclick="toggleViewer()" style="position:absolute; top:15px; right:15px; background: red; color: white;">Close</button>
+        <div id="file-content">
+            <div style="display:flex; height:100%; align-items:center; justify-content:center; color:rgba(255,255,255,0.5);">
+                Select a subject to view its dates...
+            </div>
+        </div>
+        <button onclick="toggleViewer()" style="position:absolute; top:20px; right:20px; background: rgba(253, 107, 138, 0.8); border:none;">Close</button>
     </div>
 
     <script>
@@ -80,40 +299,65 @@
         let summaryDisplayed = false;
         let isEditingTitle = false;
         let lastKnownClasses = [];
-        let allFiles = []; // For Viewer Mode caching
+        let allFiles = [];
+
+        // Handle Intro Sequence
+        window.addEventListener('load', () => {
+            // Intro takes ~2 seconds (1s logo + 1s text). Give it 2.5s total before fading out
+            setTimeout(() => {
+                const intro = document.getElementById('intro-screen');
+                intro.style.opacity = '0';
+                intro.style.visibility = 'hidden';
+                
+                // Trigger main app fade in
+                setTimeout(() => {
+                    document.getElementById('app-wrapper').classList.add('visible');
+                    intro.remove(); // Remove from DOM
+                }, 300);
+            }, 2600);
+        });
 
         async function fetchState() {
-            const res = await fetch('/api/state');
-            const state = await res.json();
-            
-            // Protect the title from being overwritten by the API loop while you are typing
-            if (!isEditingTitle) {
-                document.getElementById('class-name').innerText = state.class_name;
-            }
-            
-            lastKnownClasses = state.existing_classes;
-            document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
+            try {
+                const res = await fetch('/api/state');
+                const state = await res.json();
+                
+                if (!isEditingTitle && document.getElementById('class-name')) {
+                    document.getElementById('class-name').innerText = state.class_name;
+                }
+                
+                lastKnownClasses = state.existing_classes;
+                document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
 
-            // Append new notes
-            if (state.notes.length > knownNotesCount) {
-                const newNotes = state.notes.slice(knownNotesCount);
-                newNotes.forEach(note => {
-                    document.getElementById('notes-container').innerHTML += `<div class="note-card">${note.paragraph}</div>`;
-                });
-                knownNotesCount = state.notes.length;
-            }
+                // Append new notes with animation
+                if (state.notes.length > knownNotesCount) {
+                    const newNotes = state.notes.slice(knownNotesCount);
+                    newNotes.forEach(note => {
+                        const container = document.getElementById('notes-container');
+                        const noteDiv = document.createElement('div');
+                        noteDiv.className = 'note-card';
+                        noteDiv.innerHTML = note.paragraph;
+                        container.appendChild(noteDiv);
+                        // Auto-scroll to bottom smoothly
+                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                    });
+                    knownNotesCount = state.notes.length;
+                }
 
-            // Display master summary
-            if (state.lecture_summary && !summaryDisplayed) {
-                const mdFormat = state.lecture_summary.replace(/\n/g, '<br>');
-                document.getElementById('summaries-container').innerHTML = `<div class="note-card" style="border-left-color:#fd6b8a">${mdFormat}</div>`;
-                summaryDisplayed = true;
-            }
+                // Display master summary
+                if (state.lecture_summary && !summaryDisplayed) {
+                    const mdFormat = state.lecture_summary.replace(/\n/g, '<br>');
+                    document.getElementById('summaries-container').innerHTML = `<div class="note-card" style="border-left-color:#fd6b8a; animation-delay: 0.2s;">${mdFormat}</div>`;
+                    summaryDisplayed = true;
+                }
 
-            // Handle Search Panel
-            if (state.search_query) {
-                triggerInteractiveSearch(state.search_query);
-                fetch('/api/clear_search', { method: 'POST' }); 
+                // Handle Search Panel
+                if (state.search_query) {
+                    triggerInteractiveSearch(state.search_query);
+                    fetch('/api/clear_search', { method: 'POST' }); 
+                }
+            } catch(e) {
+                console.log("Waiting for backend...");
             }
         }
 
@@ -125,7 +369,6 @@
             const currentName = document.getElementById('class-name').innerText;
             const container = document.getElementById('title-container');
             
-            // Build the dropdown options dynamically from previous classes
             let datalistOptions = lastKnownClasses.map(c => `<option value="${c}">`).join('');
             
             container.innerHTML = `
@@ -138,7 +381,6 @@
             const input = document.getElementById('class-name-input');
             input.focus();
             
-            // Save when clicking away or hitting Enter
             input.addEventListener('blur', saveTitle);
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') saveTitle();
@@ -147,53 +389,65 @@
 
         async function saveTitle() {
             const input = document.getElementById('class-name-input');
-            if (!input) return; // Prevent double-firing
+            if (!input) return; 
             
             const newName = input.value.trim() || "Unknown Class";
             isEditingTitle = false;
             
             document.getElementById('title-container').innerHTML = `<h2 id="class-name" style="margin: 0; cursor: pointer;" title="Click to rename subject">${newName}</h2>`;
             
-            await fetch('/api/rename_class', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ class_name: newName })
-            });
+            try {
+                await fetch('/api/rename_class', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ class_name: newName })
+                });
+            } catch(e) {}
         }
 
         // --- Viewer Logic ---
         async function toggleViewer() {
             const modal = document.getElementById('viewer-modal');
-            if (modal.style.display === 'flex') {
-                modal.style.display = 'none';
+            
+            if (modal.classList.contains('open')) {
+                modal.classList.remove('open');
             } else {
-                modal.style.display = 'flex';
-                const res = await fetch('/api/files');
-                allFiles = await res.json();
-                renderViewerSubjects();
+                modal.classList.add('open');
+                try {
+                    const res = await fetch('/api/files');
+                    allFiles = await res.json();
+                    renderViewerSubjects();
+                } catch(e) {
+                    document.getElementById('file-list').innerHTML = "<p>Error loading files</p>";
+                }
             }
         }
 
         function renderViewerSubjects() {
-            // Filter down to a unique list of class names
             const subjects = [...new Set(allFiles.map(f => f.class))];
             
-            let listHtml = '<h3 style="margin-top:0; color: #fd6b8a;">Subjects</h3>';
+            let listHtml = '<h3 style="margin-top:0; color: #fd6b8a; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">Subjects</h3>';
             subjects.forEach(sub => {
                 listHtml += `<div class="file-item" onclick="renderViewerDates('${sub}')">
                     <strong>📁 ${sub}</strong>
                 </div>`;
             });
             document.getElementById('file-list').innerHTML = listHtml;
-            document.getElementById('file-content').innerText = "Select a subject to view its dates...";
+            document.getElementById('file-content').innerHTML = `
+                <div style="display:flex; height:100%; align-items:center; justify-content:center; color:rgba(255,255,255,0.5); animation: popInBounce 0.5s;">
+                    Select a subject to view its dates...
+                </div>
+            `;
         }
 
         function renderViewerDates(subject) {
-            // Find all files belonging to the clicked subject
             const dates = allFiles.filter(f => f.class === subject);
             
-            let listHtml = `<h3 style="margin-top:0; color: #fd6b8a; cursor: pointer;" onclick="renderViewerSubjects()">⬅️ Back to Subjects</h3>`;
-            listHtml += `<h4 style="margin: 0 0 10px 0;">${subject}</h4>`;
+            let listHtml = `
+                <div onclick="renderViewerSubjects()" style="cursor: pointer; opacity: 0.8; margin-bottom: 15px; display: inline-block; transition: 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                    ⬅️ Back to Subjects
+                </div>
+                <h3 style="margin: 0 0 15px 0; color: #fd6b8a;">${subject}</h3>`;
             
             dates.forEach(f => {
                 listHtml += `<div class="file-item" onclick="viewFile('${f.path.replace(/\\/g, '\\\\')}')">
@@ -204,13 +458,20 @@
         }
 
         async function viewFile(path) {
-            const res = await fetch('/api/file_content', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: path })
-            });
-            const data = await res.json();
-            document.getElementById('file-content').innerText = data.content;
+            try {
+                const res = await fetch('/api/file_content', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await res.json();
+                const contentDiv = document.getElementById('file-content');
+                contentDiv.innerText = data.content;
+                // Add tiny animation trigger
+                contentDiv.style.animation = 'none';
+                contentDiv.offsetHeight; // trigger reflow
+                contentDiv.style.animation = 'popInBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+            } catch(e) {}
         }
 
         // --- Standard Controls ---
@@ -218,26 +479,41 @@
             const panel = document.getElementById('search-panel');
             const iframe = document.getElementById('search-frame');
             iframe.src = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}`;
-            panel.style.display = 'flex';
+            
+            // Slide in smoothly via class
+            panel.classList.add('open');
             
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
-                panel.style.display = 'none';
-                iframe.src = "";
-            }, 120000);
+                closeSearchPanel();
+            }, 120000); // Closes automatically after 2 minutes
+        }
+
+        function closeSearchPanel() {
+            const panel = document.getElementById('search-panel');
+            panel.classList.remove('open');
+            setTimeout(() => { 
+                if(!panel.classList.contains('open')) {
+                    document.getElementById('search-frame').src = ""; 
+                }
+            }, 600); // Wait for transition to finish
         }
 
         async function togglePause() {
-            await fetch('/api/toggle_pause', { method: 'POST' });
+            try { await fetch('/api/toggle_pause', { method: 'POST' }); } catch(e) {}
         }
 
         async function endLecture() {
             if(confirm("End the lecture and generate the final summary?")) {
-                document.getElementById('summaries-container').innerHTML = `<em style="color: #fd6b8a;">Generating master summary...</em>`;
-                await fetch('/api/end_lecture', { method: 'POST' });
+                document.getElementById('summaries-container').innerHTML = `
+                    <div style="display:flex; height:100%; align-items:center; justify-content:center; color: #fd6b8a; font-weight: bold; animation: popInBounce 1s infinite alternate;">
+                        ✨ Generating master summary...
+                    </div>`;
+                try { await fetch('/api/end_lecture', { method: 'POST' }); } catch(e) {}
             }
         }
 
+        // Fetch state every 2 seconds
         setInterval(fetchState, 2000);
     </script>
 </body>
