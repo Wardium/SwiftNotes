@@ -16,7 +16,6 @@ import re
 from flask import Flask, render_template, jsonify, request
 import tkinter as tk
 from tkinter import filedialog
-from flask import jsonify
 import math
 import struct
 import tempfile
@@ -52,10 +51,10 @@ app_state = {
     "notes": [], 
     "lecture_summary": "", 
     "is_recording": False,
-    "lecture_active": True,
     "activity": "idle",
     "search_query": "",
-    "existing_classes": []
+    "existing_classes": [],
+    "error": None  # New global error state
 }
 
 def ask_ollama(prompt, require_json=False):
@@ -87,13 +86,11 @@ def save_note_to_disk():
     if app_state["class_name"] == "Detecting..." or not app_state["notes"]:
         return
     
-    # CHANGE IS HERE: Use the dynamic directory from app_state
     class_dir = os.path.join(app_state["current_save_dir"], app_state["class_name"])
     os.makedirs(class_dir, exist_ok=True)
     file_path = os.path.join(class_dir, f"{get_formatted_date()}.md")
     
-    status_tag = "" if not app_state["lecture_active"] else "> **[UNPROCESSED - Lecture Ongoing]**\n\n"
-    
+    status_tag = "" if not app_state["is_recording"] else "> **[UNPROCESSED - Lecture Ongoing]**\n\n"
     formatted_notes = [n["paragraph"] for n in app_state["notes"]]
     
     with open(file_path, "w") as f:
@@ -106,13 +103,9 @@ def save_note_to_disk():
 def audio_capture_thread():
     CHUNK, FORMAT, CHANNELS, RATE, RECORD_SECONDS = 1024, pyaudio.paInt16, 1, 16000, 15
     p = pyaudio.PyAudio()
-    
-    # 0 = complete digital silence.
-    # Background room hum is typically ~100-300.
-    # Normal speaking voices land well above 1000-2000.
     SILENCE_THRESHOLD = 70
     
-    while app_state["lecture_active"]:
+    while True:
         if not app_state["is_recording"]:
             time.sleep(1)
             continue
@@ -125,7 +118,6 @@ def audio_capture_thread():
             
             audio_data = b''.join(frames)
             
-            # Unpack 16-bit signed integers (h format) to calculate RMS volume
             count = len(audio_data) // 2
             if count > 0:
                 shorts = struct.unpack(f"{count}h", audio_data)
@@ -134,12 +126,10 @@ def audio_capture_thread():
             else:
                 rms = 0
             
-            # Skip if sound level is below threshold
             if rms < SILENCE_THRESHOLD:
                 print(f"[Mic] Skipping silence (Volume: {rms})")
                 continue
             
-            # Save temporary chunks safely to the system temp directory
             temp_audio = os.path.join(tempfile.gettempdir(), f"temp_chunk_{uuid.uuid4().hex}.wav")
             with wave.open(temp_audio, 'wb') as wf:
                 wf.setnchannels(CHANNELS)
@@ -149,70 +139,75 @@ def audio_capture_thread():
             
             audio_queue.put(temp_audio)
         except Exception as e:
+            app_state["error"] = f"Microphone Hardware Error: {str(e)}"
             app_state["status"] = "Mic Error"
             time.sleep(2)
             
-    p.terminate()
-    
 def ai_processing_thread():
     import mlx_whisper
     
-    while app_state["lecture_active"] or not audio_queue.empty():
+    while True:
         try:
             current_audio_file = audio_queue.get(timeout=1)
         except queue.Empty:
             continue
             
-        app_state["activity"] = "polishing"
-        raw_text = mlx_whisper.transcribe(current_audio_file)["text"]
-        
-        if os.path.exists(current_audio_file):
-            os.remove(current_audio_file)
-            
-        if not raw_text.strip():
-            audio_queue.task_done()
-            app_state["activity"] = "listening" if app_state["is_recording"] else "idle"
-            continue
-
-        prompt = f"""
-        Analyze this raw lecture transcript: "{raw_text}"
-        Available previous classes: {app_state['existing_classes']}
-        
-        Return ONLY a valid JSON object with the following keys:
-        - "class_name": Determine the academic class. Use an existing one if it matches, otherwise create a new short name.
-        - "paragraph": The raw text polished into a clean, well-formatted paragraph.
-        - "search_term": A single specific concept, term, or entity mentioned that is worth looking up. If none, return null.
-        """
-        
-        raw_response = ask_ollama(prompt, require_json=True)
-        
-        if raw_response.startswith("[AI Error:"):
-            audio_queue.task_done()
-            continue
-
         try:
-            clean_json_str = re.sub(r'```json|```', '', raw_response).strip()
-            data = json.loads(clean_json_str)
+            app_state["activity"] = "polishing"
+            raw_text = mlx_whisper.transcribe(current_audio_file)["text"]
             
-            if app_state["class_name"] == "Detecting...":
-                app_state["class_name"] = data.get("class_name", "Unknown Class")
+            if os.path.exists(current_audio_file):
+                os.remove(current_audio_file)
                 
-            note_entry = {
-                "paragraph": data.get("paragraph", raw_text),
-                "search_term": data.get("search_term")
-            }
-            app_state["notes"].append(note_entry)
-            
-            # Trigger the search query if one is provided
-            if note_entry.get("search_term"):
-                app_state["search_query"] = note_entry["search_term"]
-                
-        except Exception as e:
-            print(f"JSON Parse Error: {e}")
+            if not raw_text.strip():
+                audio_queue.task_done()
+                app_state["activity"] = "listening" if app_state["is_recording"] else "idle"
+                continue
 
-        save_note_to_disk()
-        app_state["activity"] = "listening" if app_state["is_recording"] else "idle"
-        audio_queue.task_done()
+            prompt = f"""
+            Analyze this raw lecture transcript: "{raw_text}"
+            Available previous classes: {app_state['existing_classes']}
+            
+            Return ONLY a valid JSON object with the following keys:
+            - "class_name": Determine the academic class. Use an existing one if it matches, otherwise create a new short name.
+            - "paragraph": The raw text polished into a clean, well-formatted paragraph.
+            - "search_term": A single specific concept, term, or entity mentioned that is worth looking up. If none, return null.
+            """
+            
+            raw_response = ask_ollama(prompt, require_json=True)
+            
+            if raw_response.startswith("[AI Error:"):
+                app_state["error"] = f"AI Connection Issue: {raw_response}"
+                audio_queue.task_done()
+                continue
+
+            try:
+                clean_json_str = re.sub(r'```json|```', '', raw_response).strip()
+                data = json.loads(clean_json_str)
+                
+                if app_state["class_name"] == "Detecting...":
+                    app_state["class_name"] = data.get("class_name", "Unknown Class")
+                    
+                note_entry = {
+                    "paragraph": data.get("paragraph", raw_text),
+                    "search_term": data.get("search_term")
+                }
+                app_state["notes"].append(note_entry)
+                
+                # Trigger the search query if one is provided
+                if note_entry.get("search_term"):
+                    app_state["search_query"] = note_entry["search_term"]
+                    
+            except Exception as e:
+                app_state["error"] = f"JSON Processing Error: {str(e)} - Raw Output: {raw_response}"
+
+            save_note_to_disk()
+            app_state["activity"] = "listening" if app_state["is_recording"] else "idle"
+            audio_queue.task_done()
+            
+        except Exception as e:
+            app_state["error"] = f"AI Processing Thread Error: {str(e)}"
+            audio_queue.task_done()
 
 # Flask Routes
 @app.route("/")
@@ -223,6 +218,11 @@ def index():
 @app.route("/api/state")
 def get_state(): return jsonify(app_state)
 
+@app.route("/api/clear_error", methods=["POST"])
+def clear_error():
+    app_state["error"] = None
+    return jsonify({"success": True})
+
 @app.route("/api/toggle_pause", methods=["POST"])
 def toggle_pause():
     app_state["is_recording"] = not app_state["is_recording"]
@@ -232,19 +232,58 @@ def toggle_pause():
 @app.route("/api/end_lecture", methods=["POST"])
 def end_lecture():
     app_state["is_recording"] = False
-    app_state["lecture_active"] = False
     app_state["activity"] = "summarizing"
     
     def run_summary():
-        full_text = "\n".join([n["paragraph"] for n in app_state["notes"]])
-        summary_prompt = f"Summarize this entire lecture. Include: 1. Core topics. 2. Key points. 3. Action items. Lecture: {full_text}"
-        summary = ask_ollama(summary_prompt, require_json=False)
-        
-        app_state["lecture_summary"] = summary
-        app_state["activity"] = "idle"
-        save_note_to_disk()
-        
+        try:
+            full_text = "\n".join([n["paragraph"] for n in app_state["notes"]])
+            if full_text.strip():
+                summary_prompt = f"Summarize this entire lecture. Include: 1. Core topics. 2. Key points. 3. Action items. Lecture: {full_text}"
+                summary = ask_ollama(summary_prompt, require_json=False)
+                app_state["lecture_summary"] = summary
+            save_note_to_disk()
+        except Exception as e:
+            app_state["error"] = f"Summary Generation Error: {str(e)}"
+        finally:
+            app_state["activity"] = "idle"
+            
     threading.Thread(target=run_summary).start()
+    return jsonify({"success": True})
+
+@app.route("/api/start_new_notes", methods=["POST"])
+def start_new_notes():
+    # Cache current data before wiping the live state
+    old_notes = list(app_state["notes"])
+    old_summary = app_state["lecture_summary"]
+    old_class = app_state["class_name"]
+    
+    # Instantly clear live state to feel snappy
+    app_state["notes"] = []
+    app_state["lecture_summary"] = ""
+    app_state["class_name"] = "Detecting..."
+    app_state["is_recording"] = True
+    app_state["activity"] = "listening"
+    
+    def wrap_and_reset():
+        try:
+            # Process the old data in the background
+            if old_notes and not old_summary:
+                full_text = "\n".join([n["paragraph"] for n in old_notes])
+                summary_prompt = f"Summarize this entire lecture. Include: 1. Core topics. 2. Key points. 3. Action items. Lecture: {full_text}"
+                new_summary = ask_ollama(summary_prompt, require_json=False)
+                
+                class_dir = os.path.join(app_state["current_save_dir"], old_class)
+                os.makedirs(class_dir, exist_ok=True)
+                file_path = os.path.join(class_dir, f"{get_formatted_date()}.md")
+                
+                formatted_notes = [n["paragraph"] for n in old_notes]
+                with open(file_path, "w") as f:
+                    f.write("\n\n---\n\n".join(formatted_notes))
+                    f.write(f"\n\n### Lecture Summary\n{new_summary}")
+        except Exception as e:
+            app_state["error"] = f"Failed to save previous notes: {str(e)}"
+            
+    threading.Thread(target=wrap_and_reset).start()
     return jsonify({"success": True})
 
 @app.route("/api/clear_search", methods=["POST"])
@@ -266,16 +305,19 @@ def list_files():
 
 @app.route("/api/file_content", methods=["POST"])
 def file_content():
-    with open(request.json.get("path"), "r") as f:
-        return jsonify({"content": f.read()})
+    try:
+        with open(request.json.get("path"), "r") as f:
+            return jsonify({"content": f.read()})
+    except Exception as e:
+        app_state["error"] = f"Failed to read file: {str(e)}"
+        return jsonify({"content": "Error reading file."})
 
 @app.route('/api/change_dir', methods=['POST'])
 def change_dir():
     selected_dir = ""
     
     try:
-        if sys.platform == 'darwin':  # If running on macOS
-            # Use native Mac AppleScript to open the Finder folder picker safely
+        if sys.platform == 'darwin':  
             script = '''
             tell application (path to frontmost application as text)
                 set theFolder to choose folder with prompt "Select SwiftNotes Save Directory"
@@ -283,13 +325,9 @@ def change_dir():
             end tell
             '''
             result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
-            
-            # Read the output
             if result.returncode == 0:
                 selected_dir = result.stdout.strip()
-                
         else:
-            # If running on Windows, use the Tkinter subprocess method
             script = """
 import tkinter as tk
 from tkinter import filedialog
@@ -306,9 +344,8 @@ print(folder)
             selected_dir = result.stdout.strip()
 
     except Exception as e:
-        print(f"Error opening folder picker: {e}")
+        app_state["error"] = f"Error opening folder picker: {str(e)}"
         
-    # If the user selected a folder (and didn't hit cancel)
     if selected_dir and selected_dir != "None" and selected_dir != "":
         app_state["current_save_dir"] = selected_dir
         
@@ -322,36 +359,45 @@ def rename_class():
 
     old_name = app_state["class_name"]
     
-    # If notes already exist and we aren't just stuck on 'Detecting...', move the file to the new folder
-    if app_state["notes"] and old_name != "Detecting..." and old_name != new_name:
-        old_dir = os.path.join(app_state["current_save_dir"], old_name)
-        old_file = os.path.join(old_dir, f"{get_formatted_date()}.md")
+    try:
+        if app_state["notes"] and old_name != "Detecting..." and old_name != new_name:
+            old_dir = os.path.join(app_state["current_save_dir"], old_name)
+            old_file = os.path.join(old_dir, f"{get_formatted_date()}.md")
+            
+            new_dir = os.path.join(app_state["current_save_dir"], new_name)
+            new_file = os.path.join(new_dir, f"{get_formatted_date()}.md")
+            
+            os.makedirs(new_dir, exist_ok=True)
+            
+            if os.path.exists(old_file):
+                os.rename(old_file, new_file)
+                if not os.listdir(old_dir):
+                    os.rmdir(old_dir)
         
-        new_dir = os.path.join(app_state["current_save_dir"], new_name)
-        new_file = os.path.join(new_dir, f"{get_formatted_date()}.md")
+        app_state["class_name"] = new_name
+        update_existing_classes() 
+        save_note_to_disk()
+    except Exception as e:
+        app_state["error"] = f"Error renaming class directory: {str(e)}"
         
-        os.makedirs(new_dir, exist_ok=True)
-        
-        if os.path.exists(old_file):
-            os.rename(old_file, new_file)
-            # Clean up the old directory if it's now empty
-            if not os.listdir(old_dir):
-                os.rmdir(old_dir)
-    
-    app_state["class_name"] = new_name
-    update_existing_classes() # Refresh the global classes list
-    save_note_to_disk()
     return jsonify({"success": True})
 
-def start_server(): app.run(host="127.0.0.1", port=5000, debug=False)
+def start_server(): 
+    try:
+        app.run(host="127.0.0.1", port=5000, debug=False)
+    except Exception as e:
+        app_state["error"] = f"Flask Server Crash: {str(e)}"
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
     os.makedirs(app_state["current_save_dir"], exist_ok=True)
+    
     threading.Thread(target=start_server, daemon=True).start()
     app_state["is_recording"] = True
     app_state["activity"] = "listening"
+    
     threading.Thread(target=audio_capture_thread, daemon=True).start()
     threading.Thread(target=ai_processing_thread, daemon=True).start()
-    webview.create_window("SwiftNotes", "http://127.0.0.1:5000/", width=1100, height=800)
+    
+    webview.create_window("Swift Notes", "http://127.0.0.1:5000/", width=1100, height=800)
     webview.start()
