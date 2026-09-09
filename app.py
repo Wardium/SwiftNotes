@@ -20,6 +20,9 @@ import math
 import struct
 import tempfile
 from huggingface_hub import snapshot_download
+import mlx_whisper
+import tkinter as tk
+from tkinter import filedialog
 
 # Determine if the app is running as a bundled executable or a normal script
 if getattr(sys, 'frozen', False):
@@ -166,7 +169,7 @@ def audio_capture_thread():
             time.sleep(2)
             
 def ai_processing_thread():
-    import mlx_whisper
+    
     
     while True:
         try:
@@ -356,9 +359,7 @@ def change_dir():
                 selected_dir = result.stdout.strip()
         else:
             script = """
-import tkinter as tk
-from tkinter import filedialog
-import os
+
 root = tk.Tk()
 root.withdraw()
 root.attributes('-topmost', True)
