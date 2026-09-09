@@ -23,6 +23,7 @@ from huggingface_hub import snapshot_download
 import mlx_whisper
 import tkinter as tk
 from tkinter import filedialog
+import numpy as np
 
 # Determine if the app is running as a bundled executable or a normal script
 if getattr(sys, 'frozen', False):
@@ -129,6 +130,7 @@ def audio_capture_thread():
     CHUNK, FORMAT, CHANNELS, RATE, RECORD_SECONDS = 1024, pyaudio.paInt16, 1, 16000, 15
     p = pyaudio.PyAudio()
     SILENCE_THRESHOLD = 70
+    silent_counter = 0
     
     while True:
         if not app_state["is_recording"]:
@@ -142,58 +144,68 @@ def audio_capture_thread():
             stream.close()
             
             audio_data = b''.join(frames)
-            
             count = len(audio_data) // 2
+            
             if count > 0:
                 shorts = struct.unpack(f"{count}h", audio_data)
                 sum_squares = sum(s * s for s in shorts)
                 rms = int(math.sqrt(sum_squares / count))
             else:
                 rms = 0
+                
+            # macOS privacy block detection
+            if rms == 0:
+                silent_counter += 1
+                if silent_counter > 5:
+                    app_state["error"] = "macOS is blocking the microphone (check System Settings > Privacy & Security)."
+                    time.sleep(2)
+            else:
+                silent_counter = 0
             
             if rms < SILENCE_THRESHOLD:
                 print(f"[Mic] Skipping silence (Volume: {rms})")
                 continue
             
-            temp_audio = os.path.join(tempfile.gettempdir(), f"temp_chunk_{uuid.uuid4().hex}.wav")
-            with wave.open(temp_audio, 'wb') as wf:
-                wf.setnchannels(CHANNELS)
-                wf.setsampwidth(p.get_sample_size(FORMAT))
-                wf.setframerate(RATE)
-                wf.writeframes(audio_data)
+            # --- THE MAGIC FIX: Convert directly to NumPy Float32 instead of saving a .wav file ---
+            audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
             
-            audio_queue.put(temp_audio)
+            # Put the raw array into the queue instead of a file path
+            audio_queue.put(audio_np)
+            
         except Exception as e:
             app_state["error"] = f"Microphone Hardware Error: {str(e)}"
             app_state["status"] = "Mic Error"
             time.sleep(2)
             
 def ai_processing_thread():
-    
-    
+    try:
+        import mlx_whisper
+    except Exception as e:
+        app_state["error"] = f"Failed to load mlx_whisper: {str(e)}"
+        return
+
     while True:
         try:
-            current_audio_file = audio_queue.get(timeout=1)
+            # We are now grabbing the NumPy array from the queue
+            current_audio = audio_queue.get(timeout=1)
         except queue.Empty:
             continue
             
         try:
             app_state["activity"] = "polishing"
             
-            # Use the verified local model path so it never attempts to download mid-lecture
+            # Pass the NumPy array directly into the transcriber! No FFmpeg needed.
             raw_text = mlx_whisper.transcribe(
-                current_audio_file, 
+                current_audio, 
                 path_or_hf_repo=LOCAL_MODEL_PATH
             )["text"]
             
-            if os.path.exists(current_audio_file):
-                os.remove(current_audio_file)
-                
             if not raw_text.strip():
                 audio_queue.task_done()
                 app_state["activity"] = "listening" if app_state["is_recording"] else "idle"
                 continue
 
+            # (The rest of your AI thread remains exactly the same below here...)
             prompt = f"""
             Analyze this raw lecture transcript: "{raw_text}"
             Available previous classes: {app_state['existing_classes']}
@@ -224,7 +236,6 @@ def ai_processing_thread():
                 }
                 app_state["notes"].append(note_entry)
                 
-                # Trigger the search query if one is provided
                 if note_entry.get("search_term"):
                     app_state["search_query"] = note_entry["search_term"]
                     
