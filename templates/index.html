@@ -531,7 +531,11 @@
                 modal.classList.add('open');
                 try {
                     const res = await fetch('/api/files');
-                    allFiles = await res.json();
+                    const fetchedFiles = await res.json();
+                    
+                    // Scrub out the model directory before saving to allFiles
+                    allFiles = fetchedFiles.filter(f => f.class !== 'whisper_model');
+                    
                     renderViewerSubjects();
                 } catch(e) {
                     document.getElementById('file-list').innerHTML = "<p>Error loading files</p>";
