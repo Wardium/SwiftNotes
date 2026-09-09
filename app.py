@@ -19,6 +19,7 @@ from tkinter import filedialog
 import math
 import struct
 import tempfile
+from huggingface_hub import snapshot_download
 
 # Determine if the app is running as a bundled executable or a normal script
 if getattr(sys, 'frozen', False):
@@ -56,6 +57,27 @@ app_state = {
     "existing_classes": [],
     "error": None  # New global error state
 }
+
+def ensure_model_downloaded():
+    # Save to the user's Documents folder so the .app bundle doesn't crash from read-only permissions
+    model_dir = os.path.join(DEFAULT_SAVE_DIR, "whisper_model")
+    
+    # We check for 'config.json' to ensure the download actually finished previously
+    if not os.path.exists(model_dir) or not os.path.exists(os.path.join(model_dir, "config.json")):
+        print(f"Model not found at {model_dir}. Downloading now...")
+        os.makedirs(model_dir, exist_ok=True)
+        snapshot_download(
+            repo_id="mlx-community/whisper-tiny-mlx",
+            local_dir=model_dir
+        )
+        print("Download complete!")
+    else:
+        print("Model already downloaded. Moving on!")
+        
+    return model_dir
+
+# Initialize the model path globally so the thread can use it
+LOCAL_MODEL_PATH = ensure_model_downloaded()
 
 def ask_ollama(prompt, require_json=False):
     payload = {
@@ -154,7 +176,12 @@ def ai_processing_thread():
             
         try:
             app_state["activity"] = "polishing"
-            raw_text = mlx_whisper.transcribe(current_audio_file)["text"]
+            
+            # Use the verified local model path so it never attempts to download mid-lecture
+            raw_text = mlx_whisper.transcribe(
+                current_audio_file, 
+                path_or_hf_repo=LOCAL_MODEL_PATH
+            )["text"]
             
             if os.path.exists(current_audio_file):
                 os.remove(current_audio_file)
