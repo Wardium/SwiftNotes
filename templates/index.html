@@ -29,7 +29,6 @@
             align-items: center;
             justify-content: center;
             transition: opacity 0.8s ease, visibility 0.8s ease;
-            /* Slowly fades in the blur and darkness */
             animation: introBlurIn 1.5s ease forwards;
         }
         
@@ -42,13 +41,12 @@
             100% { 
                 backdrop-filter: blur(15px); 
                 -webkit-backdrop-filter: blur(15px);
-                background: rgba(15, 15, 20, 0.6); /* Dark tint to make logo pop */
+                background: rgba(15, 15, 20, 0.6);
             }
         }
         .intro-logo {
             width: 180px;
             opacity: 0;
-            /* Bubbly pop-up */
             animation: popInBounce 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         .intro-text {
@@ -57,14 +55,11 @@
             letter-spacing: 2px;
             margin-top: 20px;
             opacity: 0;
-            /* Pops up 1 second after */
             animation: textSlideUp 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) 1s forwards;
             text-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
 
-        /* Main App Wrapper (Fades in after intro) */
-
-        
+        /* Main App Wrapper */
         #app-wrapper {
             display: flex;
             flex-direction: column;
@@ -80,26 +75,31 @@
 
         /* Frosted Glass Effect & Rounded Boxes */
         .glass { 
-            background: rgba(20, 20, 30, 0.65); /* Darker background */
+            background: rgba(20, 20, 30, 0.65); 
             backdrop-filter: blur(16px); 
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08); /* Softer border */
+            border: 1px solid rgba(255, 255, 255, 0.08); 
             border-radius: 24px; 
             padding: 20px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); /* Stronger shadow for depth */
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
         }
         
         /* Navigation / Header */
-
-        
+        /* Webkit app region allows dragging the window smoothly, which also fixes the double click bug! */
         nav { 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
             margin-bottom: 20px; 
             flex-shrink: 0;
+            -webkit-app-region: drag; 
         }
         
+        /* Exclude dragging from interactive elements */
+        nav button, .dir-selector, #title-container {
+            -webkit-app-region: no-drag; 
+        }
+
         #title-container h2 {
             transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
@@ -108,9 +108,7 @@
             text-shadow: 0 0 10px rgba(255,255,255,0.5);
         }
 
-        /* Buttons - Upgraded for INSTANT clicks and no getting stuck */
-
-        /* Directory Selector Styling */
+        /* Buttons */
         .dir-selector {
             opacity: 0.7; 
             font-size: 0.85em; 
@@ -139,7 +137,6 @@
             border-radius: 16px; 
             cursor: pointer; 
             font-weight: 600;
-            /* Snappy 0.15s recovery time so it doesn't drag */
             transition: all 0.15s ease-out; 
             margin-left: 10px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -147,19 +144,21 @@
         button:hover { 
             background: rgba(0, 0, 0, 0.6); 
             border-color: rgba(255,255,255,0.3);
-            /* Removed the scale() so it doesn't get stuck looking massive */
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(0,0,0,0.4);
         }
         button:active {
-            /* INSTANT reaction when you click (0.05s) */
             transform: translateY(2px) scale(0.95);
             transition: all 0.05s ease-in; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
+        
         .btn-stop { background: rgba(253, 107, 138, 0.15); border-color: rgba(253, 107, 138, 0.4); }
         .btn-stop:hover { background: rgba(253, 107, 138, 0.3); box-shadow: 0 8px 20px rgba(253, 107, 138, 0.2); }
         
+        .btn-new { background: rgba(107, 253, 185, 0.15); border-color: rgba(107, 253, 185, 0.4); }
+        .btn-new:hover { background: rgba(107, 253, 185, 0.3); box-shadow: 0 8px 20px rgba(107, 253, 185, 0.2); }
+
         /* Main Workspace layout */
         .workspace { display: flex; gap: 20px; flex: 1; overflow: hidden; position: relative; }
         .col { flex: 1; display: flex; flex-direction: column; overflow-y: auto; gap: 15px; padding-right: 10px; }
@@ -185,7 +184,7 @@
             box-shadow: 0 8px 20px rgba(0,0,0,0.3);
         }
         
-        /* Custom AI Panel - Slides in from right, takes 50% width */
+        /* Custom AI Panel */
         #search-panel { 
             position: fixed;
             top: 20px;
@@ -206,9 +205,30 @@
             opacity: 1;
         }
         iframe { flex: 1; width: 100%; border: none; border-radius: 16px; background: rgba(255,255,255,0.9); }
-        
         .panel-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+        }
+
+        /* Error Modal */
+        #error-modal {
+            position: fixed; 
+            top: 40px; 
+            left: 50%; 
+            transform: translateX(-50%) translateY(-20px) scale(0.95); 
+            z-index: 10000; 
+            border-left: 4px solid #fd6b8a; 
+            display: flex;
+            flex-direction: column; 
+            align-items: center; 
+            min-width: 350px;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #error-modal.open {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0) scale(1);
         }
 
         /* Viewer UI Modal */
@@ -219,7 +239,6 @@
             display: flex;
             flex-direction: row; 
             box-shadow: 0 20px 60px rgba(0,0,0,0.7); 
-            /* Hidden state with bubbly scaling */
             opacity: 0;
             pointer-events: none;
             transform: scale(0.85) translateY(20px);
@@ -276,10 +295,16 @@
             0% { opacity: 0; transform: translateY(30px); }
             100% { opacity: 1; transform: translateY(0); }
         }
-
     </style>
 </head>
 <body>
+
+    <!-- Global Error Modal -->
+    <div id="error-modal" class="glass">
+        <h3 style="color: #fd6b8a; margin-top: 0; margin-bottom: 10px;">⚠️ System Error</h3>
+        <p id="error-message" style="margin-bottom: 20px; text-align: center; word-break: break-word;"></p>
+        <button class="btn-stop" onclick="clearError()" style="margin: 0;">Dismiss</button>
+    </div>
 
     <!-- Intro Animation Overlay -->
     <div id="intro-screen">
@@ -296,14 +321,14 @@
                 </div>
                 <small id="status" style="opacity: 0.7; font-size: 0.9em; margin-top: 5px; display: block;">Status: Idle</small>
                 
-                <!-- NEW: Directory selector button -->
                 <div class="dir-selector" onclick="changeSaveDirectory()" title="Click to change save location">
                     📁 Saving to: <span id="save-dir-path">Loading...</span>
                 </div>
             </div>
-            <div>
+            <div style="display: flex; align-items: center;">
+                <button class="btn-new" onclick="startNewNotes()">+ New Notes</button>
                 <button onclick="togglePause()">Play / Pause</button>
-                <button class="btn-stop" onclick="endLecture()">End Lecture</button>
+                <button class="btn-stop" onclick="endLecture()">End Notes</button>
                 <button onclick="toggleViewer()">Viewer Mode</button>
             </div>
         </nav>
@@ -321,7 +346,6 @@
                 </div>
             </div>
 
-            <!-- AI Reference slides in floating over the right side -->
             <div id="search-panel" class="glass">
                 <div class="panel-header">
                     <h3 style="margin:0; color: #fd6b8a; display: flex; align-items: center; gap: 8px;">
@@ -353,18 +377,42 @@
         let lastKnownClasses = [];
         let allFiles = [];
 
-        // Handle Intro Sequence
+        // --- Global Error Handlers ---
+        window.onerror = function(message, source, lineno, colno, error) {
+            triggerErrorModal(`JS Interface Error: ${message} (Line ${lineno})`);
+            return true;
+        };
+
+        window.addEventListener("unhandledrejection", function(event) {
+            triggerErrorModal(`Async Rejection: ${event.reason}`);
+        });
+
+        function triggerErrorModal(msg) {
+            document.getElementById('error-message').innerText = msg;
+            document.getElementById('error-modal').classList.add('open');
+        }
+
+        async function clearError() {
+            document.getElementById('error-modal').classList.remove('open');
+            try { await fetch('/api/clear_error', { method: 'POST' }); } catch(e) {}
+        }
+
+        // --- Handle Intro Sequence ---
         window.addEventListener('load', () => {
-            // Intro takes ~2 seconds (1s logo + 1s text). Give it 2.5s total before fading out
+            const intro = document.getElementById('intro-screen');
+            
+            // Remove pointer events instantly at the start of fade out to prevent blocking initial clicks 
             setTimeout(() => {
-                const intro = document.getElementById('intro-screen');
+                intro.style.pointerEvents = 'none';
+            }, 1000); 
+
+            setTimeout(() => {
                 intro.style.opacity = '0';
                 intro.style.visibility = 'hidden';
                 
-                // Trigger main app fade in
                 setTimeout(() => {
                     document.getElementById('app-wrapper').classList.add('visible');
-                    intro.remove(); // Remove from DOM
+                    intro.remove(); 
                 }, 300);
             }, 2600);
         });
@@ -374,6 +422,11 @@
                 const res = await fetch('/api/state');
                 const state = await res.json();
                 
+                // Monitor for backend errors
+                if (state.error) {
+                    triggerErrorModal(state.error);
+                }
+
                 if (!isEditingTitle && document.getElementById('class-name')) {
                     document.getElementById('class-name').innerText = state.class_name;
                 }
@@ -381,12 +434,10 @@
                 lastKnownClasses = state.existing_classes;
                 document.getElementById('status').innerText = `Status: ${state.activity} | Recording: ${state.is_recording}`;
 
-                // Update save directory text
                 if (state.current_save_dir && document.getElementById('save-dir-path')) {
                     document.getElementById('save-dir-path').innerText = state.current_save_dir;
                 }
 
-                // Append new notes with animation
                 if (state.notes.length > knownNotesCount) {
                     const newNotes = state.notes.slice(knownNotesCount);
                     newNotes.forEach(note => {
@@ -395,20 +446,17 @@
                         noteDiv.className = 'note-card';
                         noteDiv.innerHTML = note.paragraph;
                         container.appendChild(noteDiv);
-                        // Auto-scroll to bottom smoothly
                         container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
                     });
                     knownNotesCount = state.notes.length;
                 }
 
-                // Display master summary
                 if (state.lecture_summary && !summaryDisplayed) {
                     const mdFormat = state.lecture_summary.replace(/\n/g, '<br>');
                     document.getElementById('summaries-container').innerHTML = `<div class="note-card" style="border-left-color:#fd6b8a; animation-delay: 0.2s;">${mdFormat}</div>`;
                     summaryDisplayed = true;
                 }
 
-                // Handle Search Panel
                 if (state.search_query) {
                     triggerInteractiveSearch(state.search_query);
                     fetch('/api/clear_search', { method: 'POST' }); 
@@ -446,13 +494,9 @@
 
         async function changeSaveDirectory() {
             try {
-                // Add a small visual cue that it's opening
                 document.getElementById('save-dir-path').innerText = "Opening Folder Picker...";
-                
                 const res = await fetch('/api/change_dir', { method: 'POST' });
                 const data = await res.json();
-                
-                // Update to the new directory
                 document.getElementById('save-dir-path').innerText = data.new_dir;
             } catch(e) {
                 console.log("Failed to change directory");
@@ -539,9 +583,8 @@
                 const data = await res.json();
                 const contentDiv = document.getElementById('file-content');
                 contentDiv.innerText = data.content;
-                // Add tiny animation trigger
                 contentDiv.style.animation = 'none';
-                contentDiv.offsetHeight; // trigger reflow
+                contentDiv.offsetHeight; 
                 contentDiv.style.animation = 'popInBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
             } catch(e) {}
         }
@@ -552,13 +595,12 @@
             const iframe = document.getElementById('search-frame');
             iframe.src = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}`;
             
-            // Slide in smoothly via class
             panel.classList.add('open');
             
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 closeSearchPanel();
-            }, 120000); // Closes automatically after 2 minutes
+            }, 120000); 
         }
 
         function closeSearchPanel() {
@@ -568,24 +610,33 @@
                 if(!panel.classList.contains('open')) {
                     document.getElementById('search-frame').src = ""; 
                 }
-            }, 600); // Wait for transition to finish
+            }, 600);
         }
 
         async function togglePause() {
             try { await fetch('/api/toggle_pause', { method: 'POST' }); } catch(e) {}
         }
 
-        async function endLecture() {
-            if(confirm("End the lecture and generate the final summary?")) {
-                document.getElementById('summaries-container').innerHTML = `
-                    <div style="display:flex; height:100%; align-items:center; justify-content:center; color: #fd6b8a; font-weight: bold; animation: popInBounce 1s infinite alternate;">
-                        ✨ Generating master summary...
-                    </div>`;
-                try { await fetch('/api/end_lecture', { method: 'POST' }); } catch(e) {}
-            }
+        async function startNewNotes() {
+            // Optimistically update the UI to feel instant
+            document.getElementById('notes-container').innerHTML = '';
+            document.getElementById('summaries-container').innerHTML = '<em style="color: rgba(255,255,255,0.5); text-align: center; margin-top: 20px;">Summary will be generated when lecture ends...</em>';
+            document.getElementById('class-name').innerText = 'Detecting...';
+            knownNotesCount = 0;
+            summaryDisplayed = false;
+            
+            try { await fetch('/api/start_new_notes', { method: 'POST' }); } catch(e) {}
         }
 
-        // Fetch state every 2 seconds
+        async function endLecture() {
+            // Warning removed, executes instantly
+            document.getElementById('summaries-container').innerHTML = `
+                <div style="display:flex; height:100%; align-items:center; justify-content:center; color: #fd6b8a; font-weight: bold; animation: popInBounce 1s infinite alternate;">
+                    ✨ Generating master summary...
+                </div>`;
+            try { await fetch('/api/end_lecture', { method: 'POST' }); } catch(e) {}
+        }
+
         setInterval(fetchState, 2000);
     </script>
 </body>
